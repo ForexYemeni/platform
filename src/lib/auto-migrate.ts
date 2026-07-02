@@ -135,6 +135,37 @@ async function seedIfEmpty() {
 // Create tables using raw SQL
 // ============================================
 async function createTablesRaw(db: any) {
+  // ============================================
+  // 0. DROP old tables if they exist with wrong schema (TEXT instead of enums)
+  // ============================================
+  const dropStatements = [
+    `DROP TABLE IF EXISTS "Session" CASCADE`,
+    `DROP TABLE IF EXISTS "Notification" CASCADE`,
+    `DROP TABLE IF EXISTS "UserTask" CASCADE`,
+    `DROP TABLE IF EXISTS "Task" CASCADE`,
+    `DROP TABLE IF EXISTS "ReferralEarning" CASCADE`,
+    `DROP TABLE IF EXISTS "Transaction" CASCADE`,
+    `DROP TABLE IF EXISTS "Withdrawal" CASCADE`,
+    `DROP TABLE IF EXISTS "Deposit" CASCADE`,
+    `DROP TABLE IF EXISTS "AdminSettings" CASCADE`,
+    `DROP TABLE IF EXISTS "User" CASCADE`,
+    `DROP TABLE IF EXISTS "Plan" CASCADE`,
+    `DROP TYPE IF EXISTS "Role" CASCADE`,
+    `DROP TYPE IF EXISTS "PaymentStatus" CASCADE`,
+    `DROP TYPE IF EXISTS "TransactionType" CASCADE`,
+    `DROP TYPE IF EXISTS "TaskType" CASCADE`,
+    `DROP TYPE IF EXISTS "RewardType" CASCADE`,
+    `DROP TYPE IF EXISTS "NotificationType" CASCADE`,
+  ]
+
+  for (const stmt of dropStatements) {
+    try {
+      await db.$executeRawUnsafe(stmt)
+    } catch (e) {
+      // Silent
+    }
+  }
+
   const statements = [
     // ============================================
     // 1. Create ENUM types FIRST (PostgreSQL requires this)
