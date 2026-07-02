@@ -306,33 +306,56 @@ export function DashboardOverview() {
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h3 className="font-bold">{isRtl ? 'قوة التعدين' : 'Mining Hashrate'}</h3>
-                <p className="text-xs text-muted-foreground">{isRtl ? 'آخر 24 ساعة' : 'Last 24 hours'}</p>
+                <p className="text-xs text-muted-foreground">{isRtl ? 'حالتك الحالية' : 'Your current status'}</p>
               </div>
               <Cpu className="h-4 w-4 text-[#9d4edd]" />
             </div>
-            <div className="text-3xl font-black text-gradient-electric mb-2">145.32 TH/s</div>
-            <div className="flex items-center gap-2 mb-4">
-              <Badge className="bg-emerald-500/20 text-emerald-400 border-0 gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                {isRtl ? 'يعمل' : 'Online'}
-              </Badge>
-              <span className="text-xs text-muted-foreground">99.98% {isRtl ? 'وقت التشغيل' : 'uptime'}</span>
-            </div>
-            <ResponsiveContainer width="100%" height={180}>
-              <BarChart data={miningChartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                <XAxis dataKey="hour" tick={{ fill: 'rgba(255,255,255,0.3)', fontSize: 9 }} interval={3} />
-                <YAxis tick={{ fill: 'rgba(255,255,255,0.3)', fontSize: 9 }} />
-                <Tooltip
-                  contentStyle={{
-                    background: 'rgba(20,20,35,0.95)',
-                    border: '1px solid rgba(157,78,221,0.3)',
-                    borderRadius: '12px',
-                  }}
-                />
-                <Bar dataKey="hashrate" fill="#9d4edd" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            {hasActivePlan && user?.activePlan ? (
+              <>
+                <div className="text-3xl font-black text-gradient-electric mb-2">
+                  {user.activePlan.hashrate}
+                </div>
+                <div className="flex items-center gap-2 mb-4">
+                  <Badge className="bg-emerald-500/20 text-emerald-400 border-0 gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    {isRtl ? 'يعمل' : 'Online'}
+                  </Badge>
+                  <span className="text-xs text-muted-foreground">
+                    {user.activePlan.dailyProfit}% {isRtl ? 'يومي' : 'daily'}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="p-3 rounded-xl glass text-center">
+                    <div className="text-xs text-muted-foreground mb-1">{isRtl ? 'الاستثمار' : 'Investment'}</div>
+                    <div className="text-lg font-bold">${user.activePlan.investment}</div>
+                  </div>
+                  <div className="p-3 rounded-xl glass text-center">
+                    <div className="text-xs text-muted-foreground mb-1">{isRtl ? 'المدة' : 'Duration'}</div>
+                    <div className="text-lg font-bold">{user.activePlan.duration} {isRtl ? 'يوم' : 'days'}</div>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="text-center py-8">
+                <div className="w-14 h-14 rounded-2xl bg-[#9d4edd]/10 flex items-center justify-center mx-auto mb-3">
+                  <Cpu className="h-7 w-7 text-[#9d4edd]" />
+                </div>
+                <div className="text-3xl font-black text-muted-foreground mb-2">0 TH/s</div>
+                <Badge className="bg-muted/20 text-muted-foreground border-0 mb-3">
+                  {isRtl ? 'متوقف' : 'Offline'}
+                </Badge>
+                <p className="text-xs text-muted-foreground mb-4">
+                  {isRtl ? 'فعّل خطة تعدين لتبدأ' : 'Activate a mining plan to start'}
+                </p>
+                <Button
+                  size="sm"
+                  className="bg-gradient-to-r from-[#00d4ff] to-[#9d4edd] text-white border-0"
+                  onClick={() => setView('mining')}
+                >
+                  {isRtl ? 'ابدأ التعدين' : 'Start Mining'}
+                </Button>
+              </div>
+            )}
           </Card>
         </motion.div>
       </div>
