@@ -1,6 +1,7 @@
 // ============================================
 // Crypto Mining Investment Platform - Database Schema
 // ============================================
+// Uses String instead of enums for maximum compatibility
 // Works with: PostgreSQL (Vercel Postgres, Neon, Supabase)
 // ============================================
 
@@ -25,8 +26,8 @@ model User {
   phone           String?
   country         String?
   
-  // Account type
-  role            Role     @default(USER)
+  // Account type - using String instead of enum
+  role            String   @default("USER")
   isAdmin         Boolean  @default(false)
   
   // Balance & profits
@@ -83,12 +84,6 @@ model User {
   @@index([referredById])
 }
 
-enum Role {
-  USER
-  ADMIN
-  MODERATOR
-}
-
 // ============================================
 // Mining Plans
 // ============================================
@@ -97,8 +92,8 @@ model Plan {
   name          String
   nameAr        String
   investment    Float
-  dailyProfit   Float    // percentage
-  duration      Int      // days
+  dailyProfit   Float
+  duration      Int
   hashrate      String
   color         String
   gradient      String
@@ -115,19 +110,19 @@ model Plan {
 // Deposits
 // ============================================
 model Deposit {
-  id            String        @id @default(cuid())
+  id            String   @id @default(cuid())
   userId        String
-  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   amount        Float
   currency      String
   network       String
   txHash        String?
   address       String
-  status        PaymentStatus @default(PENDING)
-  confirmations Int           @default(0)
-  requiredConfirmations Int   @default(3)
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  status        String   @default("PENDING")
+  confirmations Int      @default(0)
+  requiredConfirmations Int @default(3)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
   
   @@index([userId])
   @@index([status])
@@ -137,19 +132,19 @@ model Deposit {
 // Withdrawals
 // ============================================
 model Withdrawal {
-  id            String        @id @default(cuid())
+  id            String   @id @default(cuid())
   userId        String
-  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   amount        Float
   currency      String
   network       String
   address       String
   fee           Float
-  status        PaymentStatus @default(PENDING)
+  status        String   @default("PENDING")
   txHash        String?
   processedAt   DateTime?
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
   
   @@index([userId])
   @@index([status])
@@ -159,37 +154,19 @@ model Withdrawal {
 // Transactions (all types)
 // ============================================
 model Transaction {
-  id            String          @id @default(cuid())
+  id            String   @id @default(cuid())
   userId        String
-  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  type          TransactionType
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type          String
   amount        Float
   currency      String
-  status        PaymentStatus   @default(COMPLETED)
+  status        String   @default("COMPLETED")
   description   String?
   txHash        String?
-  createdAt     DateTime        @default(now())
+  createdAt     DateTime @default(now())
   
   @@index([userId])
   @@index([type])
-}
-
-enum TransactionType {
-  DEPOSIT
-  WITHDRAWAL
-  PROFIT
-  REFERRAL
-  TASK_REWARD
-  BONUS
-  PENALTY
-}
-
-enum PaymentStatus {
-  PENDING
-  PROCESSING
-  COMPLETED
-  REJECTED
-  CANCELLED
 }
 
 // ============================================
@@ -201,10 +178,10 @@ model ReferralEarning {
   referrer      User     @relation("ReferrerEarnings", fields: [referrerId], references: [id], onDelete: Cascade)
   referredId    String
   referred      User     @relation("ReferredInEarnings", fields: [referredId], references: [id])
-  level         Int      // 1, 2, or 3
+  level         Int
   percentage    Float
   amount        Float
-  source        String   // "deposit", "profit", etc.
+  source        String
   createdAt     DateTime @default(now())
   
   @@index([referrerId])
@@ -220,11 +197,11 @@ model Task {
   titleAr       String
   description   String
   descriptionAr String
-  type          TaskType
+  type          String
   reward        Float
-  rewardType    RewardType
+  rewardType    String
   icon          String
-  total         Int?     // for tasks with progress (e.g., invite 5 friends)
+  total         Int?
   active        Boolean  @default(true)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -232,56 +209,38 @@ model Task {
 }
 
 model UserTask {
-  id            String       @id @default(cuid())
+  id            String   @id @default(cuid())
   userId        String
-  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   taskId        String
-  task          Task         @relation(fields: [taskId], references: [id])
-  progress      Int          @default(0)
-  completed     Boolean      @default(false)
-  claimed       Boolean      @default(false)
+  task          Task     @relation(fields: [taskId], references: [id])
+  progress      Int      @default(0)
+  completed     Boolean  @default(false)
+  claimed       Boolean  @default(false)
   completedAt   DateTime?
   claimedAt     DateTime?
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
   
   @@unique([userId, taskId])
   @@index([userId])
-}
-
-enum TaskType {
-  DAILY
-  WEEKLY
-  SPECIAL
-}
-
-enum RewardType {
-  USDT
-  POINTS
 }
 
 // ============================================
 // Notifications
 // ============================================
 model Notification {
-  id            String             @id @default(cuid())
+  id            String   @id @default(cuid())
   userId        String
-  user          User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  type          NotificationType
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type          String
   title         String
   message       String
-  read          Boolean            @default(false)
-  createdAt     DateTime           @default(now())
+  read          Boolean  @default(false)
+  createdAt     DateTime @default(now())
   
   @@index([userId])
   @@index([read])
-}
-
-enum NotificationType {
-  SUCCESS
-  INFO
-  WARNING
-  ERROR
 }
 
 // ============================================
