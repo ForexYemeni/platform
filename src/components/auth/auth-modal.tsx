@@ -67,6 +67,10 @@ export function AuthModal() {
       if (data.data?.user) {
         login(data.data.user)
         toast.success(isRtl ? 'تم تسجيل الدخول بنجاح!' : 'Login successful!')
+        // Fetch fresh data after a short delay
+        setTimeout(() => {
+          useAppStore.getState().fetchCurrentUser()
+        }, 500)
       }
       setLoading(false)
     } catch (err: any) {

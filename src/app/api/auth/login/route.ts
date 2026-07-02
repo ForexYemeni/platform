@@ -19,7 +19,10 @@ export async function POST(req: NextRequest) {
     // 🔧 AUTO-MIGRATE: create tables + seed admin if needed
     await ensureDatabaseReady()
 
-    const user = await db.user.findUnique({ where: { email } })
+    const user = await db.user.findUnique({
+      where: { email },
+      include: { activePlan: true }
+    })
     if (!user || !user.passwordHash) {
       return apiError('Invalid email or password', 401)
     }
@@ -61,7 +64,9 @@ export async function POST(req: NextRequest) {
         monthlyProfit: user.monthlyProfit,
         points: user.points,
         vipLevel: user.vipLevel,
-        activePlan: null,
+        activePlan: user.activePlan || null,
+        planActivatedAt: user.planActivatedAt,
+        planExpiresAt: user.planExpiresAt,
         joinedAt: user.createdAt.toISOString(),
         referrals: 0,
       }

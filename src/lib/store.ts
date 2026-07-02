@@ -119,15 +119,19 @@ export const useAppStore = create<AppState>()(
         try {
           const res = await fetch('/api/auth/me')
           if (!res.ok) {
-            set({ user: null })
+            // Session invalid - clear user and go home
+            set({ user: null, view: 'home' })
             return
           }
           const data = await res.json()
           if (data.success && data.data.user) {
+            // Preserve current view if user is still valid
             set({ user: data.data.user })
+          } else {
+            set({ user: null, view: 'home' })
           }
         } catch {
-          // Network error - keep current state
+          // Network error - keep current state (might be offline)
         }
       },
 
