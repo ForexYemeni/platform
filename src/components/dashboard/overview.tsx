@@ -79,17 +79,33 @@ export function DashboardOverview() {
     }
   }
 
-  // Only show live profit counter if user has an active plan
+  // Live profit counter - REAL cumulative calculation (same as mining page)
+  // Profit accrues continuously based on time elapsed since plan activation
   useEffect(() => {
-    if (!user?.dailyProfit || user.dailyProfit <= 0) {
+    if (!user?.activePlan || !user?.planActivatedAt || !user?.planExpiresAt || new Date(user.planExpiresAt) <= new Date()) {
       setLiveProfit(0)
       return
     }
-    const interval = setInterval(() => {
-      setLiveProfit(p => p + Math.random() * 0.001)
-    }, 3000)
+
+    const dailyProfitAmount = user.activePlan.investment * user.activePlan.dailyProfit / 100
+    const planActivatedAt = new Date(user.planActivatedAt).getTime()
+
+    const calcProfit = () => {
+      const now = Date.now()
+      const elapsedMs = now - planActivatedAt
+      const elapsedDays = elapsedMs / (1000 * 60 * 60 * 24)
+      // Profit = dailyProfit × days elapsed (continuous accrual)
+      const earned = dailyProfitAmount * elapsedDays
+      // Subtract already-claimed profit (totalProfit represents claimed/credited amount)
+      const unclaimed = Math.max(0, earned - (user.totalProfit || 0))
+      setLiveProfit(unclaimed)
+    }
+
+    calcProfit()
+    // Update every second for smooth counter
+    const interval = setInterval(calcProfit, 1000)
     return () => clearInterval(interval)
-  }, [])
+  }, [user?.activePlan, user?.planActivatedAt, user?.planExpiresAt, user?.totalProfit])
 
   const hasActivePlan = dashboardData?.user?.isMiningActive || (user?.activePlan && user?.planExpiresAt && new Date(user.planExpiresAt) > new Date())
 

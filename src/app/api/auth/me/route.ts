@@ -35,8 +35,8 @@ export async function GET() {
         twoFactorEnabled: userData.twoFactorEnabled,
         emailVerified: userData.emailVerified,
         activePlan: userData.activePlan || null,
-        planActivatedAt: userData.planActivatedAt,
-        planExpiresAt: userData.planExpiresAt,
+        planActivatedAt: userData.planActivatedAt ? (userData.planActivatedAt instanceof Date ? userData.planActivatedAt.toISOString() : userData.planActivatedAt) : null,
+        planExpiresAt: userData.planExpiresAt ? (userData.planExpiresAt instanceof Date ? userData.planExpiresAt.toISOString() : userData.planExpiresAt) : null,
         joinedAt: userData.createdAt?.toISOString?.() || userData.createdAt,
       }
     })

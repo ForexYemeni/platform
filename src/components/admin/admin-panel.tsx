@@ -763,9 +763,9 @@ function WalletForm({ wallet, saving, onSave, onCancel }: { wallet: Wallet | nul
     { value: 'BEP20', label: 'USDT - BEP20 (BNB Smart Chain)', currency: 'USDT-BEP20' },
     { value: 'Solana', label: 'USDT - Solana', currency: 'USDT-Solana' },
     { value: 'Polygon', label: 'USDT - Polygon', currency: 'USDT-Polygon' },
-    { value: 'Arbitrum One', label: 'USDT - Arbitrum One', currency: 'USDT-Arbitrum' },
+    { value: 'Arbitrum One', label: 'USDT - Arbitrum One', currency: 'USDT-Arbitrum One' },
     { value: 'Optimism', label: 'USDT - Optimism', currency: 'USDT-Optimism' },
-    { value: 'Avalanche C-Chain', label: 'USDT - Avalanche C-Chain', currency: 'USDT-Avalanche' },
+    { value: 'Avalanche C-Chain', label: 'USDT - Avalanche C-Chain', currency: 'USDT-Avalanche C-Chain' },
   ]
 
   // Find current network selection

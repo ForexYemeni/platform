@@ -65,8 +65,8 @@ export async function POST(req: NextRequest) {
         points: user.points,
         vipLevel: user.vipLevel,
         activePlan: user.activePlan || null,
-        planActivatedAt: user.planActivatedAt,
-        planExpiresAt: user.planExpiresAt,
+        planActivatedAt: user.planActivatedAt ? user.planActivatedAt.toISOString() : null,
+        planExpiresAt: user.planExpiresAt ? user.planExpiresAt.toISOString() : null,
         joinedAt: user.createdAt.toISOString(),
         referrals: 0,
       }

@@ -54,18 +54,27 @@ export function DepositsPage() {
 
   // Get the real wallet address for selected crypto (from admin-managed wallets)
   const getRealAddress = (): string => {
-    // Try multiple key formats: "usdt-trc20", "USDT-TRC20", "USDT"+"TRC20"
-    const walletKey = selectedCrypto.id // e.g., "usdt-trc20"
-    const walletKeyUpper = walletKey.toUpperCase() // "USDT-TRC20"
+    // Build the wallet key to match admin WalletForm format: "USDT-{NETWORK}"
+    const walletKey = `USDT-${selectedCrypto.network}`
 
-    const wallets = realWallets[walletKey] || realWallets[walletKeyUpper] ||
-                    (realWallets[selectedCrypto.symbol] || []).filter((w: any) =>
-                      w.network === selectedCrypto.network || w.network?.toUpperCase() === selectedCrypto.network?.toUpperCase()
-                    )
+    // Search in all wallet groups
+    for (const key of Object.keys(realWallets)) {
+      const wallets = realWallets[key]
+      if (!wallets || !Array.isArray(wallets)) continue
 
-    if (wallets && wallets.length > 0) {
-      return wallets[0].address
+      // Match by currency field (admin stores currency as "USDT-TRC20", etc.)
+      const match = wallets.find((w: any) => {
+        // Direct currency match
+        if (w.currency === walletKey) return true
+        // Match by network
+        if (w.currency === 'USDT' && w.network === selectedCrypto.network) return true
+        // Case-insensitive match
+        if (w.currency?.toUpperCase() === walletKey.toUpperCase()) return true
+        return false
+      })
+      if (match) return match.address
     }
+
     return '' // No address configured - admin must add one
   }
 
