@@ -136,6 +136,19 @@ async function seedIfEmpty() {
 // ============================================
 async function createTablesRaw(db: any) {
   const statements = [
+    // ============================================
+    // 1. Create ENUM types FIRST (PostgreSQL requires this)
+    // ============================================
+    `DO $$ BEGIN CREATE TYPE "Role" AS ENUM ('USER', 'ADMIN', 'MODERATOR'); EXCEPTION WHEN duplicate_object THEN null; END $$`,
+    `DO $$ BEGIN CREATE TYPE "PaymentStatus" AS ENUM ('PENDING', 'PROCESSING', 'COMPLETED', 'REJECTED', 'CANCELLED'); EXCEPTION WHEN duplicate_object THEN null; END $$`,
+    `DO $$ BEGIN CREATE TYPE "TransactionType" AS ENUM ('DEPOSIT', 'WITHDRAWAL', 'PROFIT', 'REFERRAL', 'TASK_REWARD', 'BONUS', 'PENALTY'); EXCEPTION WHEN duplicate_object THEN null; END $$`,
+    `DO $$ BEGIN CREATE TYPE "TaskType" AS ENUM ('DAILY', 'WEEKLY', 'SPECIAL'); EXCEPTION WHEN duplicate_object THEN null; END $$`,
+    `DO $$ BEGIN CREATE TYPE "RewardType" AS ENUM ('USDT', 'POINTS'); EXCEPTION WHEN duplicate_object THEN null; END $$`,
+    `DO $$ BEGIN CREATE TYPE "NotificationType" AS ENUM ('SUCCESS', 'INFO', 'WARNING', 'ERROR'); EXCEPTION WHEN duplicate_object THEN null; END $$`,
+
+    // ============================================
+    // 2. Create tables
+    // ============================================
     `CREATE TABLE IF NOT EXISTS "User" (
       "id" TEXT NOT NULL,
       "email" TEXT NOT NULL,
@@ -144,7 +157,7 @@ async function createTablesRaw(db: any) {
       "avatar" TEXT,
       "phone" TEXT,
       "country" TEXT,
-      "role" TEXT NOT NULL DEFAULT 'USER',
+      "role" "Role" NOT NULL DEFAULT 'USER',
       "isAdmin" BOOLEAN NOT NULL DEFAULT false,
       "balance" DOUBLE PRECISION NOT NULL DEFAULT 0,
       "totalProfit" DOUBLE PRECISION NOT NULL DEFAULT 0,
@@ -201,7 +214,7 @@ async function createTablesRaw(db: any) {
       "network" TEXT NOT NULL,
       "txHash" TEXT,
       "address" TEXT NOT NULL,
-      "status" TEXT NOT NULL DEFAULT 'PENDING',
+      "status" "PaymentStatus" NOT NULL DEFAULT 'PENDING',
       "confirmations" INTEGER NOT NULL DEFAULT 0,
       "requiredConfirmations" INTEGER NOT NULL DEFAULT 3,
       "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -217,7 +230,7 @@ async function createTablesRaw(db: any) {
       "network" TEXT NOT NULL,
       "address" TEXT NOT NULL,
       "fee" DOUBLE PRECISION NOT NULL,
-      "status" TEXT NOT NULL DEFAULT 'PENDING',
+      "status" "PaymentStatus" NOT NULL DEFAULT 'PENDING',
       "txHash" TEXT,
       "processedAt" TIMESTAMP(3),
       "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -228,10 +241,10 @@ async function createTablesRaw(db: any) {
     `CREATE TABLE IF NOT EXISTS "Transaction" (
       "id" TEXT NOT NULL,
       "userId" TEXT NOT NULL,
-      "type" TEXT NOT NULL,
+      "type" "TransactionType" NOT NULL,
       "amount" DOUBLE PRECISION NOT NULL,
       "currency" TEXT NOT NULL,
-      "status" TEXT NOT NULL DEFAULT 'COMPLETED',
+      "status" "PaymentStatus" NOT NULL DEFAULT 'COMPLETED',
       "description" TEXT,
       "txHash" TEXT,
       "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -256,9 +269,9 @@ async function createTablesRaw(db: any) {
       "titleAr" TEXT NOT NULL,
       "description" TEXT NOT NULL,
       "descriptionAr" TEXT NOT NULL,
-      "type" TEXT NOT NULL,
+      "type" "TaskType" NOT NULL,
       "reward" DOUBLE PRECISION NOT NULL,
-      "rewardType" TEXT NOT NULL,
+      "rewardType" "RewardType" NOT NULL,
       "icon" TEXT NOT NULL,
       "total" INTEGER,
       "active" BOOLEAN NOT NULL DEFAULT true,
@@ -285,7 +298,7 @@ async function createTablesRaw(db: any) {
     `CREATE TABLE IF NOT EXISTS "Notification" (
       "id" TEXT NOT NULL,
       "userId" TEXT NOT NULL,
-      "type" TEXT NOT NULL,
+      "type" "NotificationType" NOT NULL,
       "title" TEXT NOT NULL,
       "message" TEXT NOT NULL,
       "read" BOOLEAN NOT NULL DEFAULT false,
