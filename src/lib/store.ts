@@ -34,17 +34,19 @@ export interface User {
   id: string
   name: string
   email: string
-  avatar: string
+  avatar?: string
   balance: number
   totalProfit: number
   dailyProfit: number
   monthlyProfit: number
   referrals: number
-  activePlan: string | null
+  activePlan: any | null
+  planExpiresAt?: string | null
   joinedAt: string
   isAdmin: boolean
   vipLevel: number
   points: number
+  referralCode?: string
 }
 
 interface NotificationItem {
@@ -67,7 +69,8 @@ interface AppState {
   authStage: AuthStage
   setAuthStage: (stage: AuthStage) => void
   login: (user: User) => void
-  logout: () => void
+  logout: () => Promise<void>
+  fetchCurrentUser: () => Promise<void>
 
   // Navigation
   view: View
@@ -76,18 +79,17 @@ interface AppState {
   // Notifications
   notifications: NotificationItem[]
   addNotification: (n: Omit<NotificationItem, 'id' | 'time' | 'read'>) => void
-  markAllRead: () => void
-
-  // Mining stats
-  miningHashrate: number
-  miningUptime: number
-  incrementMining: () => void
+  markAllRead: () => Promise<void>
 
   // UI state
   sidebarOpen: boolean
   setSidebarOpen: (open: boolean) => void
   mobileMenuOpen: boolean
   setMobileMenuOpen: (open: boolean) => void
+
+  // Loading
+  loading: boolean
+  setLoading: (loading: boolean) => void
 }
 
 export const useAppStore = create<AppState>()(
@@ -103,7 +105,27 @@ export const useAppStore = create<AppState>()(
       authStage: 'closed',
       setAuthStage: (authStage) => set({ authStage }),
       login: (user) => set({ user, authStage: 'closed', view: 'dashboard' }),
-      logout: () => set({ user: null, view: 'home', authStage: 'closed' }),
+      logout: async () => {
+        try {
+          await fetch('/api/auth/logout', { method: 'POST' })
+        } catch {}
+        set({ user: null, view: 'home', authStage: 'closed' })
+      },
+      fetchCurrentUser: async () => {
+        try {
+          const res = await fetch('/api/auth/me')
+          if (!res.ok) {
+            set({ user: null })
+            return
+          }
+          const data = await res.json()
+          if (data.success && data.data.user) {
+            set({ user: data.data.user })
+          }
+        } catch {
+          // Network error - keep current state
+        }
+      },
 
       // Navigation
       view: 'home',
@@ -119,34 +141,10 @@ export const useAppStore = create<AppState>()(
         {
           id: '1',
           type: 'success',
-          title: 'تم استلام أرباحك اليومية',
-          message: 'تم إضافة $4.50 إلى رصيدك من الخطة الذهبية',
-          time: 'منذ 5 دقائق',
+          title: 'مرحباً بك في المنصة',
+          message: 'استكشف جميع المميزات المتاحة لك',
+          time: 'الآن',
           read: false,
-        },
-        {
-          id: '2',
-          type: 'info',
-          title: 'إيداع جديد مؤكد',
-          message: 'تم تأكيد إيداع بقيمة 0.005 BTC',
-          time: 'منذ ساعة',
-          read: false,
-        },
-        {
-          id: '3',
-          type: 'warning',
-          title: 'تذكير: أكمل مهامك اليومية',
-          message: 'لديك 3 مهام غير مكتملة اليوم',
-          time: 'منذ 3 ساعات',
-          read: true,
-        },
-        {
-          id: '4',
-          type: 'success',
-          title: 'إحالة جديدة',
-          message: 'انضم مستخدم جديد عبر رابطك في المستوى الأول',
-          time: 'منذ 5 ساعات',
-          read: true,
         },
       ],
       addNotification: (n) =>
@@ -161,24 +159,28 @@ export const useAppStore = create<AppState>()(
             ...s.notifications,
           ],
         })),
-      markAllRead: () =>
+      markAllRead: async () => {
+        try {
+          await fetch('/api/user/notifications', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'markAllRead' })
+          })
+        } catch {}
         set((s) => ({
           notifications: s.notifications.map((n) => ({ ...n, read: true })),
-        })),
-
-      // Mining
-      miningHashrate: 145.32,
-      miningUptime: 99.98,
-      incrementMining: () =>
-        set((s) => ({
-          miningHashrate: s.miningHashrate + Math.random() * 2 - 1,
-        })),
+        }))
+      },
 
       // UI
       sidebarOpen: true,
       setSidebarOpen: (sidebarOpen) => set({ sidebarOpen }),
       mobileMenuOpen: false,
       setMobileMenuOpen: (mobileMenuOpen) => set({ mobileMenuOpen }),
+
+      // Loading
+      loading: false,
+      setLoading: (loading) => set({ loading }),
     }),
     {
       name: 'cmip-storage',

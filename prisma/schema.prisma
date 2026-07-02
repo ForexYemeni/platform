@@ -1,32 +1,321 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+// ============================================
+// Crypto Mining Investment Platform - Database Schema
+// ============================================
+// Works with: PostgreSQL (Vercel Postgres, Neon, Supabase)
+// ============================================
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
+// ============================================
+// User Model
+// ============================================
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id              String   @id @default(cuid())
+  email           String   @unique
+  name            String?
+  passwordHash    String?
+  avatar          String?
+  phone           String?
+  country         String?
+  
+  // Account type
+  role            Role     @default(USER)
+  isAdmin         Boolean  @default(false)
+  
+  // Balance & profits
+  balance         Float    @default(0)
+  totalProfit     Float    @default(0)
+  dailyProfit     Float    @default(0)
+  monthlyProfit   Float    @default(0)
+  points          Int      @default(0)
+  vipLevel        Int      @default(1)
+  
+  // Referral system
+  referralCode    String   @unique
+  referredById    String?
+  referredBy      User?    @relation("Referrals", fields: [referredById], references: [id])
+  referrals       User[]   @relation("Referrals")
+  
+  // Security
+  twoFactorEnabled Boolean @default(false)
+  twoFactorSecret  String?
+  emailVerified    Boolean @default(false)
+  isBlocked        Boolean @default(false)
+  isBanned         Boolean @default(false)
+  
+  // OAuth providers
+  googleId         String?
+  telegramId       String?
+  appleId          String?
+  
+  // Activity
+  lastLogin        DateTime?
+  lastActive       DateTime?
+  
+  // Mining plan
+  activePlanId     String?
+  activePlan       Plan?   @relation(fields: [activePlanId], references: [id])
+  planActivatedAt  DateTime?
+  planExpiresAt    DateTime?
+  
+  // Timestamps
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  
+  // Relations
+  deposits         Deposit[]
+  withdrawals      Withdrawal[]
+  transactions     Transaction[]
+  tasks            UserTask[]
+  notifications    Notification[]
+  referralEarnings        ReferralEarning[] @relation("ReferrerEarnings")
+  referredInEarnings      ReferralEarning[] @relation("ReferredInEarnings")
+  
+  @@index([email])
+  @@index([referralCode])
+  @@index([referredById])
 }
 
-model Post {
-  id        String   @id @default(cuid())
-  title     String
-  content   String?
-  published Boolean  @default(false)
-  authorId  String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+enum Role {
+  USER
+  ADMIN
+  MODERATOR
+}
+
+// ============================================
+// Mining Plans
+// ============================================
+model Plan {
+  id            String   @id @default(cuid())
+  name          String
+  nameAr        String
+  investment    Float
+  dailyProfit   Float    // percentage
+  duration      Int      // days
+  hashrate      String
+  color         String
+  gradient      String
+  icon          String
+  popular       Boolean  @default(false)
+  active        Boolean  @default(true)
+  features      Json
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  users         User[]
+}
+
+// ============================================
+// Deposits
+// ============================================
+model Deposit {
+  id            String        @id @default(cuid())
+  userId        String
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount        Float
+  currency      String
+  network       String
+  txHash        String?
+  address       String
+  status        PaymentStatus @default(PENDING)
+  confirmations Int           @default(0)
+  requiredConfirmations Int   @default(3)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  
+  @@index([userId])
+  @@index([status])
+}
+
+// ============================================
+// Withdrawals
+// ============================================
+model Withdrawal {
+  id            String        @id @default(cuid())
+  userId        String
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount        Float
+  currency      String
+  network       String
+  address       String
+  fee           Float
+  status        PaymentStatus @default(PENDING)
+  txHash        String?
+  processedAt   DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  
+  @@index([userId])
+  @@index([status])
+}
+
+// ============================================
+// Transactions (all types)
+// ============================================
+model Transaction {
+  id            String          @id @default(cuid())
+  userId        String
+  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type          TransactionType
+  amount        Float
+  currency      String
+  status        PaymentStatus   @default(COMPLETED)
+  description   String?
+  txHash        String?
+  createdAt     DateTime        @default(now())
+  
+  @@index([userId])
+  @@index([type])
+}
+
+enum TransactionType {
+  DEPOSIT
+  WITHDRAWAL
+  PROFIT
+  REFERRAL
+  TASK_REWARD
+  BONUS
+  PENALTY
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  REJECTED
+  CANCELLED
+}
+
+// ============================================
+// Referral Earnings
+// ============================================
+model ReferralEarning {
+  id            String   @id @default(cuid())
+  referrerId    String
+  referrer      User     @relation("ReferrerEarnings", fields: [referrerId], references: [id], onDelete: Cascade)
+  referredId    String
+  referred      User     @relation("ReferredInEarnings", fields: [referredId], references: [id])
+  level         Int      // 1, 2, or 3
+  percentage    Float
+  amount        Float
+  source        String   // "deposit", "profit", etc.
+  createdAt     DateTime @default(now())
+  
+  @@index([referrerId])
+  @@index([referredId])
+}
+
+// ============================================
+// Tasks
+// ============================================
+model Task {
+  id            String   @id @default(cuid())
+  title         String
+  titleAr       String
+  description   String
+  descriptionAr String
+  type          TaskType
+  reward        Float
+  rewardType    RewardType
+  icon          String
+  total         Int?     // for tasks with progress (e.g., invite 5 friends)
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  userTasks     UserTask[]
+}
+
+model UserTask {
+  id            String       @id @default(cuid())
+  userId        String
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  taskId        String
+  task          Task         @relation(fields: [taskId], references: [id])
+  progress      Int          @default(0)
+  completed     Boolean      @default(false)
+  claimed       Boolean      @default(false)
+  completedAt   DateTime?
+  claimedAt     DateTime?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  
+  @@unique([userId, taskId])
+  @@index([userId])
+}
+
+enum TaskType {
+  DAILY
+  WEEKLY
+  SPECIAL
+}
+
+enum RewardType {
+  USDT
+  POINTS
+}
+
+// ============================================
+// Notifications
+// ============================================
+model Notification {
+  id            String             @id @default(cuid())
+  userId        String
+  user          User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type          NotificationType
+  title         String
+  message       String
+  read          Boolean            @default(false)
+  createdAt     DateTime           @default(now())
+  
+  @@index([userId])
+  @@index([read])
+}
+
+enum NotificationType {
+  SUCCESS
+  INFO
+  WARNING
+  ERROR
+}
+
+// ============================================
+// Admin Settings (single row)
+// ============================================
+model AdminSettings {
+  id                    String   @id @default("singleton")
+  platformName          String   @default("CryptoMine 2026")
+  maintenanceMode       Boolean  @default(false)
+  signupEnabled         Boolean  @default(true)
+  minWithdrawalUsd      Float    @default(20)
+  defaultWithdrawalFee  Float    @default(1)
+  recaptchaEnabled      Boolean  @default(false)
+  binanceApiKey         String?
+  coinbaseApiKey        String?
+  telegramBotToken      String?
+  telegramBotUsername   String?
+  smtpHost              String?
+  smtpPort              Int?
+  smtpUser              String?
+  smtpPass              String?
+  updatedAt             DateTime @updatedAt
+}
+
+// ============================================
+// Sessions (for JWT-based auth)
+// ============================================
+model Session {
+  id            String   @id @default(cuid())
+  userId        String
+  token         String   @unique
+  expiresAt     DateTime
+  createdAt     DateTime @default(now())
+  
+  @@index([userId])
+  @@index([token])
 }

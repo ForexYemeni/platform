@@ -40,17 +40,39 @@ export function AuthModal() {
     setOtp(['', '', '', '', '', ''])
   }
 
-  const handleEmailSubmit = (e: React.FormEvent) => {
+  const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
-    setTimeout(() => {
-      setLoading(false)
-      if (authStage === 'login') {
-        setAuthStage('twofa')
-      } else {
-        setAuthStage('otp')
+    try {
+      const endpoint = authStage === 'login' ? '/api/auth/login' : '/api/auth/register'
+      const body = authStage === 'register'
+        ? { name, email, password }
+        : { email, password }
+
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+
+      const data = await res.json()
+
+      if (!data.success) {
+        toast.error(data.error || (isRtl ? 'فشل العملية' : 'Operation failed'))
+        setLoading(false)
+        return
       }
-    }, 800)
+
+      // Login successful
+      if (data.data?.user) {
+        login(data.data.user)
+        toast.success(isRtl ? 'تم تسجيل الدخول بنجاح!' : 'Login successful!')
+      }
+      setLoading(false)
+    } catch (err: any) {
+      toast.error(err.message || 'Network error')
+      setLoading(false)
+    }
   }
 
   const handleOtpChange = (idx: number, value: string) => {
@@ -64,52 +86,45 @@ export function AuthModal() {
     }
   }
 
-  const handleVerify = () => {
+  const handleVerify = async () => {
     setLoading(true)
+    // For demo: any 6-digit code works
     setTimeout(() => {
       setLoading(false)
       login({
         id: 'user-001',
-        name: name || 'Ahmed Hassan',
-        email: email || 'ahmed@example.com',
+        name: name || 'User',
+        email: email || 'user@example.com',
         avatar: '',
-        balance: 4520.50,
-        totalProfit: 1820.75,
-        dailyProfit: 20.0,
-        monthlyProfit: 600.0,
-        referrals: 12,
-        activePlan: 'Gold',
-        joinedAt: '2026-05-12',
+        balance: 25,
+        totalProfit: 0,
+        dailyProfit: 0,
+        monthlyProfit: 0,
+        referrals: 0,
+        activePlan: null,
+        joinedAt: new Date().toISOString(),
         isAdmin: false,
-        vipLevel: 2,
-        points: 1250,
+        vipLevel: 1,
+        points: 0,
       })
       toast.success(lang === 'ar' ? 'تم تسجيل الدخول بنجاح!' : 'Login successful!')
     }, 800)
   }
 
-  const handleSocialLogin = (provider: string) => {
+  const handleSocialLogin = async (provider: string) => {
     setLoading(true)
-    setTimeout(() => {
+    try {
+      // In production, redirect to OAuth provider
+      // For now, show message
+      toast.info(isRtl
+        ? `سيتم توجيهك إلى ${provider} لإكمال تسجيل الدخول`
+        : `You will be redirected to ${provider} to complete sign in`
+      )
       setLoading(false)
-      login({
-        id: 'user-001',
-        name: 'Ahmed Hassan',
-        email: `ahmed@${provider}.com`,
-        avatar: '',
-        balance: 4520.50,
-        totalProfit: 1820.75,
-        dailyProfit: 20.0,
-        monthlyProfit: 600.0,
-        referrals: 12,
-        activePlan: 'Gold',
-        joinedAt: '2026-05-12',
-        isAdmin: false,
-        vipLevel: 2,
-        points: 1250,
-      })
-      toast.success(`${lang === 'ar' ? 'تم تسجيل الدخول عبر' : 'Signed in with'} ${provider}!`)
-    }, 800)
+    } catch (err: any) {
+      toast.error(err.message)
+      setLoading(false)
+    }
   }
 
   const isRtl = lang === 'ar'
