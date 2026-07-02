@@ -249,6 +249,7 @@ export function AdminPanel() {
           <TabsTrigger value="tasks"><CheckSquare className="h-4 w-4 me-2" />{isRtl ? 'المهام' : 'Tasks'}</TabsTrigger>
           <TabsTrigger value="wallets"><Wallet className="h-4 w-4 me-2" />{isRtl ? 'المحافظ' : 'Wallets'}</TabsTrigger>
           <TabsTrigger value="rewards"><Gift className="h-4 w-4 me-2" />{isRtl ? 'المكافآت' : 'Rewards'}</TabsTrigger>
+          <TabsTrigger value="referrals"><Users className="h-4 w-4 me-2" />{isRtl ? 'الإحالات' : 'Referrals'}</TabsTrigger>
           <TabsTrigger value="settings"><Settings className="h-4 w-4 me-2" />{isRtl ? 'الإعدادات' : 'Settings'}</TabsTrigger>
         </TabsList>
 
@@ -372,6 +373,11 @@ export function AdminPanel() {
         {/* === REWARDS === */}
         <TabsContent value="rewards">
           <RewardsManager users={realUsers} onRefresh={fetchAllData} />
+        </TabsContent>
+
+        {/* === REFERRALS === */}
+        <TabsContent value="referrals">
+          <ReferralsManager />
         </TabsContent>
 
         {/* === SETTINGS === */}
@@ -1031,6 +1037,242 @@ function RewardForm({ users, saving, onSave, onCancel }: { users: any[], saving:
         <Button variant="outline" className="glass" onClick={onCancel}>{isRtl ? 'إلغاء' : 'Cancel'}</Button>
       </div>
     </div>
+  )
+}
+
+// ============================================
+// REFERRALS MANAGER - Full referral system control
+// ============================================
+function ReferralsManager() {
+  const { lang } = useAppStore()
+  const isRtl = lang === 'ar'
+  const [data, setData] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+  const [selectedUser, setSelectedUser] = useState<any>(null)
+
+  const fetchData = async () => {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/admin/referrals')
+      if (res.ok) {
+        const d = await res.json()
+        if (d.success) setData(d.data)
+      }
+    } catch (e) {}
+    finally { setLoading(false) }
+  }
+
+  useEffect(() => { fetchData() }, [])
+
+  const filteredUsers = (data?.users || []).filter((u: any) =>
+    u.name?.toLowerCase().includes(search.toLowerCase()) ||
+    u.email?.toLowerCase().includes(search.toLowerCase()) ||
+    u.referralCode?.toLowerCase().includes(search.toLowerCase())
+  )
+
+  return (
+    <div className="space-y-4">
+      {/* Overall stats */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <Card className="p-4 glass border-white/5">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[#00d4ff]/10 flex items-center justify-center">
+              <Users className="h-5 w-5 text-[#00d4ff]" />
+            </div>
+            <div>
+              <div className="text-lg font-bold">{data?.stats?.totalUsers || 0}</div>
+              <div className="text-xs text-muted-foreground">{isRtl ? 'إجمالي المستخدمين' : 'Total Users'}</div>
+            </div>
+          </div>
+        </Card>
+        <Card className="p-4 glass border-white/5">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[#9d4edd]/10 flex items-center justify-center">
+              <Users className="h-5 w-5 text-[#9d4edd]" />
+            </div>
+            <div>
+              <div className="text-lg font-bold">{data?.stats?.totalReferrals || 0}</div>
+              <div className="text-xs text-muted-foreground">{isRtl ? 'إجمالي الإحالات' : 'Total Referrals'}</div>
+            </div>
+          </div>
+        </Card>
+        <Card className="p-4 glass border-white/5">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[#10b981]/10 flex items-center justify-center">
+              <CheckCircle2 className="h-5 w-5 text-[#10b981]" />
+            </div>
+            <div>
+              <div className="text-lg font-bold">{data?.stats?.totalActiveReferrals || 0}</div>
+              <div className="text-xs text-muted-foreground">{isRtl ? 'إحالات نشطة' : 'Active Referrals'}</div>
+            </div>
+          </div>
+        </Card>
+        <Card className="p-4 glass border-white/5">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[#ffd700]/10 flex items-center justify-center">
+              <DollarSign className="h-5 w-5 text-[#ffd700]" />
+            </div>
+            <div>
+              <div className="text-lg font-bold">${(data?.stats?.totalEarnings || 0).toFixed(2)}</div>
+              <div className="text-xs text-muted-foreground">{isRtl ? 'عمولات مدفوعة' : 'Commissions Paid'}</div>
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      {/* Users table with referral stats */}
+      <Card className="p-5 glass border-white/5">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mb-4">
+          <h3 className="font-bold">{isRtl ? 'إحالات كل مستخدم' : 'User Referrals'}</h3>
+          <div className="relative flex-1 sm:flex-none w-full sm:w-64">
+            <Search className="absolute top-1/2 -translate-y-1/2 start-3 h-4 w-4 text-muted-foreground" />
+            <Input placeholder={isRtl ? 'بحث...' : 'Search...'} value={search} onChange={e => setSearch(e.target.value)} className="ps-10 bg-white/5" />
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="flex justify-center py-8"><Loader2 className="h-8 w-8 animate-spin text-[#00d4ff]" /></div>
+        ) : (
+          <div className="overflow-x-auto scrollbar-luxury">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-xs text-muted-foreground border-b border-border">
+                  <th className="text-start font-medium pb-3 ps-2">{isRtl ? 'المستخدم' : 'User'}</th>
+                  <th className="text-start font-medium pb-3">{isRtl ? 'رمز الدعوة' : 'Referral Code'}</th>
+                  <th className="text-start font-medium pb-3 hidden md:table-cell">{isRtl ? 'دُعي بواسطة' : 'Referred By'}</th>
+                  <th className="text-start font-medium pb-3">{isRtl ? 'الإحالات' : 'Referrals'}</th>
+                  <th className="text-start font-medium pb-3 hidden lg:table-cell">{isRtl ? 'النشطة' : 'Active'}</th>
+                  <th className="text-start font-medium pb-3">{isRtl ? 'الأرباح' : 'Earnings'}</th>
+                  <th className="text-start font-medium pb-3"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredUsers.length === 0 ? (
+                  <tr><td colSpan={7} className="py-8 text-center text-muted-foreground">{isRtl ? 'لا يوجد' : 'No users'}</td></tr>
+                ) : filteredUsers.map((u: any) => (
+                  <tr key={u.id} className="border-b border-border/50 hover:bg-accent/30">
+                    <td className="py-3 ps-2">
+                      <div className="font-medium text-sm">{u.name || 'Unknown'}</div>
+                      <div className="text-xs text-muted-foreground">{u.email}</div>
+                    </td>
+                    <td className="py-3">
+                      <Badge variant="outline" className="font-mono border-[#00d4ff]/30 text-[#00d4ff]">{u.referralCode}</Badge>
+                    </td>
+                    <td className="py-3 hidden md:table-cell text-xs text-muted-foreground">
+                      {u.referredBy ? `${u.referredBy.name} (${u.referredBy.referralCode})` : (isRtl ? 'مباشر' : 'Direct')}
+                    </td>
+                    <td className="py-3 font-semibold">{u.referralCount}</td>
+                    <td className="py-3 hidden lg:table-cell text-emerald-400">{u.activeReferralCount}</td>
+                    <td className="py-3 font-semibold text-[#ffd700]">${u.referralEarnings.toFixed(2)}</td>
+                    <td className="py-3">
+                      <Button size="sm" variant="outline" className="glass" onClick={() => setSelectedUser(u)}>
+                        {isRtl ? 'تفاصيل' : 'Details'}
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+
+      {/* User referral details modal */}
+      {selectedUser && (
+        <UserReferralDetail user={selectedUser} onClose={() => setSelectedUser(null)} />
+      )}
+    </div>
+  )
+}
+
+function UserReferralDetail({ user, onClose }: { user: any, onClose: () => void }) {
+  const { lang } = useAppStore()
+  const isRtl = lang === 'ar'
+  const [data, setData] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetch(`/api/admin/referrals?userId=${user.id}`)
+      .then(r => r.json())
+      .then(d => { if (d.success) setData(d.data) })
+      .finally(() => setLoading(false))
+  }, [user.id])
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      onClick={onClose}
+      className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+    >
+      <motion.div
+        initial={{ scale: 0.9, y: 20 }}
+        animate={{ scale: 1, y: 0 }}
+        onClick={e => e.stopPropagation()}
+        className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto scrollbar-luxury"
+      >
+        <div className="glass rounded-3xl border-white/10 p-6">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h3 className="text-xl font-bold">{user.name}</h3>
+              <p className="text-sm text-muted-foreground">{user.email}</p>
+              <Badge variant="outline" className="font-mono border-[#00d4ff]/30 text-[#00d4ff] mt-2">{user.referralCode}</Badge>
+            </div>
+            <button onClick={onClose} className="w-9 h-9 rounded-full glass flex items-center justify-center"><X className="h-4 w-4" /></button>
+          </div>
+
+          {loading ? (
+            <div className="flex justify-center py-8"><Loader2 className="h-8 w-8 animate-spin" /></div>
+          ) : data ? (
+            <div className="space-y-4">
+              {/* Stats */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="p-3 rounded-xl glass text-center">
+                  <div className="text-2xl font-black text-[#00d4ff]">{data.tree.level1.count}</div>
+                  <div className="text-xs text-muted-foreground">{isRtl ? 'المستوى 1' : 'Level 1'}</div>
+                </div>
+                <div className="p-3 rounded-xl glass text-center">
+                  <div className="text-2xl font-black text-[#9d4edd]">{data.tree.level2.count}</div>
+                  <div className="text-xs text-muted-foreground">{isRtl ? 'المستوى 2' : 'Level 2'}</div>
+                </div>
+                <div className="p-3 rounded-xl glass text-center">
+                  <div className="text-2xl font-black text-[#ffd700]">${data.totalEarnings.toFixed(2)}</div>
+                  <div className="text-xs text-muted-foreground">{isRtl ? 'الأرباح' : 'Earnings'}</div>
+                </div>
+              </div>
+
+              {/* Referred users */}
+              <div>
+                <h4 className="font-bold mb-2 text-sm">{isRtl ? 'المستوى 1 - الإحالات المباشرة' : 'Level 1 - Direct Referrals'}</h4>
+                {data.tree.level1.users.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-4 text-center">{isRtl ? 'لا توجد إحالات' : 'No referrals'}</p>
+                ) : (
+                  <div className="space-y-2 max-h-48 overflow-y-auto scrollbar-luxury">
+                    {data.tree.level1.users.map((u: any) => (
+                      <div key={u.id} className="flex items-center gap-3 p-2 rounded-lg glass">
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#00d4ff] to-[#9d4edd] flex items-center justify-center text-white text-xs font-bold">
+                          {u.name?.charAt(0) || 'U'}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium">{u.name}</div>
+                          <div className="text-xs text-muted-foreground">{u.email}</div>
+                        </div>
+                        <Badge className={u.activePlanId ? 'bg-emerald-500/20 text-emerald-400 border-0' : 'bg-muted/20 text-muted-foreground border-0'}>
+                          {u.activePlanId ? (isRtl ? 'نشط' : 'Active') : (isRtl ? 'غير نشط' : 'Inactive')}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <p className="text-center text-muted-foreground py-8">{isRtl ? 'فشل تحميل البيانات' : 'Failed to load'}</p>
+          )}
+        </div>
+      </motion.div>
+    </motion.div>
   )
 }
 
