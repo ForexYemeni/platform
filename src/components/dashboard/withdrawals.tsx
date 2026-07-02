@@ -1,10 +1,10 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { useState } from 'react'
-import { ArrowUpRight, Wallet, AlertCircle, CheckCircle2, Clock, Send } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { ArrowUpRight, Wallet, AlertCircle, CheckCircle2, Clock, Send, Loader2 } from 'lucide-react'
 import { useAppStore } from '@/lib/store'
-import { cryptos, mockTransactions } from '@/lib/data'
+import { cryptos } from '@/lib/data'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -18,12 +18,36 @@ export function WithdrawalsPage() {
   const [selectedCrypto, setSelectedCrypto] = useState(cryptos[2])
   const [address, setAddress] = useState('')
   const [amount, setAmount] = useState('')
+  const [withdrawals, setWithdrawals] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
 
-  const balance = user?.balance || 4520.50
+  // REAL balance from user object (not hardcoded)
+  const balance = user?.balance || 0
   const fee = selectedCrypto.withdrawFee
   const youReceive = parseFloat(amount) ? Math.max(0, parseFloat(amount) - fee) : 0
 
-  const handleSubmit = () => {
+  // Fetch real withdrawals
+  useEffect(() => {
+    fetchWithdrawals()
+  }, [])
+
+  const fetchWithdrawals = async () => {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/user/withdrawals')
+      if (res.ok) {
+        const data = await res.json()
+        if (data.success) setWithdrawals(data.data.withdrawals || [])
+      }
+    } catch (e) {
+      console.error('Failed to fetch withdrawals:', e)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleSubmit = async () => {
     if (!address) {
       toast.error(isRtl ? 'أدخل عنوان الاستلام' : 'Enter receiving address')
       return
@@ -36,9 +60,32 @@ export function WithdrawalsPage() {
       toast.error(isRtl ? 'الرصيد غير كافٍ' : 'Insufficient balance')
       return
     }
-    toast.success(isRtl ? 'تم إرسال طلب السحب!' : 'Withdrawal request submitted!')
-    setAddress('')
-    setAmount('')
+    setSubmitting(true)
+    try {
+      const res = await fetch('/api/user/withdrawals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: parseFloat(amount),
+          currency: selectedCrypto.symbol,
+          network: selectedCrypto.network,
+          address,
+        })
+      })
+      const data = await res.json()
+      if (data.success) {
+        toast.success(isRtl ? 'تم إرسال طلب السحب!' : 'Withdrawal request submitted!')
+        setAddress('')
+        setAmount('')
+        fetchWithdrawals()
+      } else {
+        toast.error(data.error || 'Failed')
+      }
+    } catch (e) {
+      toast.error(isRtl ? 'خطأ في الشبكة' : 'Network error')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -174,10 +221,17 @@ export function WithdrawalsPage() {
 
             <Button
               onClick={handleSubmit}
+              disabled={submitting}
               className="w-full h-12 bg-gradient-to-r from-[#9d4edd] to-[#00d4ff] text-white border-0 glow-purple"
             >
-              <Send className="h-4 w-4 me-2 rtl:rotate-180" />
-              {isRtl ? 'إرسال طلب السحب' : 'Submit Withdrawal Request'}
+              {submitting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <>
+                  <Send className="h-4 w-4 me-2 rtl:rotate-180" />
+                  {isRtl ? 'إرسال طلب السحب' : 'Submit Withdrawal Request'}
+                </>
+              )}
             </Button>
           </Card>
         </motion.div>
@@ -258,10 +312,13 @@ export function WithdrawalsPage() {
                 </tr>
               </thead>
               <tbody>
-                {mockTransactions.filter(t => t.type === 'withdrawal').concat([
-                  { id: 'w2', type: 'withdrawal' as const, amount: 100, currency: 'USDT', status: 'completed' as const, date: '2026-06-28 10:30', txHash: '0x1234...abcd' },
-                  { id: 'w3', type: 'withdrawal' as const, amount: 0.005, currency: 'BTC', status: 'completed' as const, date: '2026-06-25 14:20', txHash: 'bc1q...xyz' },
-                ]).map((tx) => {
+                {withdrawals.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="py-8 text-center text-muted-foreground">
+                      {loading ? (isRtl ? 'جارٍ التحميل...' : 'Loading...') : (isRtl ? 'لا توجد سحوبات بعد' : 'No withdrawals yet')}
+                    </td>
+                  </tr>
+                ) : withdrawals.map((tx) => {
                   const crypto = cryptos.find(c => c.symbol === tx.currency) || cryptos[0]
                   return (
                     <tr key={tx.id} className="border-b border-border/50 hover:bg-accent/30 transition-colors">
@@ -278,20 +335,22 @@ export function WithdrawalsPage() {
                       </td>
                       <td className="py-3 font-semibold text-red-400">-{tx.amount} {tx.currency}</td>
                       <td className="py-3 hidden md:table-cell text-muted-foreground font-mono text-xs">
-                        {(tx.txHash || '0xabcd...1234').slice(0, 14)}...
+                        {tx.address ? tx.address.substring(0, 14) + '...' : '-'}
                       </td>
-                      <td className="py-3 hidden md:table-cell text-muted-foreground">{tx.date}</td>
+                      <td className="py-3 hidden md:table-cell text-muted-foreground">
+                        {new Date(tx.createdAt).toLocaleString()}
+                      </td>
                       <td className="py-3">
                         <Badge
                           variant="outline"
                           className={
-                            tx.status === 'completed' ? 'border-emerald-500/30 text-emerald-400' :
-                            tx.status === 'pending' ? 'border-amber-500/30 text-amber-400' :
+                            tx.status === 'COMPLETED' ? 'border-emerald-500/30 text-emerald-400' :
+                            tx.status === 'PENDING' ? 'border-amber-500/30 text-amber-400' :
                             'border-red-500/30 text-red-400'
                           }
                         >
-                          {tx.status === 'completed' ? (isRtl ? 'مكتمل' : 'Completed') :
-                           tx.status === 'pending' ? (isRtl ? 'معلق' : 'Pending') :
+                          {tx.status === 'COMPLETED' ? (isRtl ? 'مكتمل' : 'Completed') :
+                           tx.status === 'PENDING' ? (isRtl ? 'معلق' : 'Pending') :
                            (isRtl ? 'مرفوض' : 'Rejected')}
                         </Badge>
                       </td>

@@ -1,29 +1,52 @@
 'use client'
 
 import { motion, AnimatePresence } from 'framer-motion'
+import { useState, useEffect } from 'react'
 import {
   LayoutDashboard, Cpu, ArrowDownToLine, ArrowUpFromLine,
-  Users, CheckSquare, Bell, Settings, Shield, X, LogOut, Sparkles, Crown
+  Users, CheckSquare, Bell, Settings, Shield, X, LogOut, Crown
 } from 'lucide-react'
 import { useAppStore, type View } from '@/lib/store'
 import { Logo } from '@/components/shared/logo'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 
-const menuItems: { icon: any; view: View; labelAr: string; labelEn: string; badge?: string }[] = [
+const menuItems: { icon: any; view: View; labelAr: string; labelEn: string }[] = [
   { icon: LayoutDashboard, view: 'dashboard', labelAr: 'نظرة عامة', labelEn: 'Overview' },
   { icon: Cpu, view: 'mining', labelAr: 'التعدين', labelEn: 'Mining' },
   { icon: ArrowDownToLine, view: 'deposits', labelAr: 'الإيداعات', labelEn: 'Deposits' },
   { icon: ArrowUpFromLine, view: 'withdrawals', labelAr: 'السحوبات', labelEn: 'Withdrawals' },
   { icon: Users, view: 'referral', labelAr: 'الإحالات', labelEn: 'Referrals' },
-  { icon: CheckSquare, view: 'tasks', labelAr: 'المهام', labelEn: 'Tasks', badge: '3' },
-  { icon: Bell, view: 'notifications', labelAr: 'الإشعارات', labelEn: 'Notifications', badge: '2' },
+  { icon: CheckSquare, view: 'tasks', labelAr: 'المهام', labelEn: 'Tasks' },
+  { icon: Bell, view: 'notifications', labelAr: 'الإشعارات', labelEn: 'Notifications' },
   { icon: Settings, view: 'settings', labelAr: 'الإعدادات', labelEn: 'Settings' },
 ]
 
 export function DashboardSidebar({ isAdmin = false }: { isAdmin?: boolean }) {
   const { lang, view, setView, user, logout, sidebarOpen, setSidebarOpen, mobileMenuOpen, setMobileMenuOpen } = useAppStore()
   const isRtl = lang === 'ar'
+  const [unreadCount, setUnreadCount] = useState(0)
+
+  // Fetch real unread notification count
+  useEffect(() => {
+    if (!user) return
+    const fetchUnread = async () => {
+      try {
+        const res = await fetch('/api/user/notifications')
+        if (res.ok) {
+          const data = await res.json()
+          if (data.success) {
+            const unread = (data.data.notifications || []).filter((n: any) => !n.read).length
+            setUnreadCount(unread)
+          }
+        }
+      } catch (e) {}
+    }
+    fetchUnread()
+    // Refresh every 30 seconds
+    const interval = setInterval(fetchUnread, 30000)
+    return () => clearInterval(interval)
+  }, [user])
 
   const adminItems: { icon: any; view: View; labelAr: string; labelEn: string }[] = [
     { icon: Shield, view: 'admin', labelAr: 'لوحة الإدارة', labelEn: 'Admin Panel' },
@@ -71,14 +94,14 @@ export function DashboardSidebar({ isAdmin = false }: { isAdmin?: boolean }) {
                     <span className="text-sm font-medium flex-1 text-start">
                       {isRtl ? item.labelAr : item.labelEn}
                     </span>
-                    {item.badge && (
+                    {item.view === 'notifications' && unreadCount > 0 && (
                       <Badge className="bg-[#9d4edd] text-white border-0 text-[10px] px-1.5 py-0">
-                        {item.badge}
+                        {unreadCount}
                       </Badge>
                     )}
                   </>
                 )}
-                {!sidebarOpen && item.badge && (
+                {!sidebarOpen && item.view === 'notifications' && unreadCount > 0 && (
                   <span className="absolute top-1 end-1 w-2 h-2 rounded-full bg-[#9d4edd]" />
                 )}
               </button>
@@ -192,8 +215,8 @@ export function DashboardSidebar({ isAdmin = false }: { isAdmin?: boolean }) {
                     <span className="text-sm font-medium flex-1 text-start">
                       {isRtl ? item.labelAr : item.labelEn}
                     </span>
-                    {item.badge && (
-                      <Badge className="bg-[#9d4edd] text-white border-0 text-[10px]">{item.badge}</Badge>
+                    {item.view === 'notifications' && unreadCount > 0 && (
+                      <Badge className="bg-[#9d4edd] text-white border-0 text-[10px]">{unreadCount}</Badge>
                     )}
                   </button>
                 ))}
@@ -235,9 +258,28 @@ export function DashboardSidebar({ isAdmin = false }: { isAdmin?: boolean }) {
 }
 
 export function DashboardTopbar() {
-  const { lang, user, setMobileMenuOpen, notifications, setView } = useAppStore()
+  const { lang, user, setMobileMenuOpen, setView } = useAppStore()
   const isRtl = lang === 'ar'
-  const unread = notifications.filter(n => !n.read).length
+  const [unread, setUnread] = useState(0)
+
+  // Fetch real unread count
+  useEffect(() => {
+    if (!user) return
+    const fetchUnread = async () => {
+      try {
+        const res = await fetch('/api/user/notifications')
+        if (res.ok) {
+          const data = await res.json()
+          if (data.success) {
+            setUnread((data.data.notifications || []).filter((n: any) => !n.read).length)
+          }
+        }
+      } catch (e) {}
+    }
+    fetchUnread()
+    const interval = setInterval(fetchUnread, 30000)
+    return () => clearInterval(interval)
+  }, [user])
 
   return (
     <header className="sticky top-0 z-30 glass border-b border-border">
