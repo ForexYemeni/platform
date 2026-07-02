@@ -1,6 +1,7 @@
 import { db } from './db'
 import { cookies } from 'next/headers'
 import jwt from 'jsonwebtoken'
+import { ensureDatabaseReady } from './auto-migrate'
 
 const JWT_SECRET = process.env.NEXTAUTH_SECRET || process.env.JWT_SECRET || 'fallback-secret-change-me'
 const SESSION_COOKIE = 'cmip_session'
@@ -81,6 +82,9 @@ export async function getCurrentUser() {
   if (!db) return null
 
   try {
+    // Auto-migrate: create tables + seed if needed
+    await ensureDatabaseReady()
+
     const user = await db.user.findUnique({
       where: { id: payload.userId },
       include: { activePlan: true }

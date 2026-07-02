@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { db } from '@/lib/db'
 import { verifyPassword, signToken, setSessionCookie, apiSuccess, apiError } from '@/lib/auth'
+import { ensureDatabaseReady } from '@/lib/auto-migrate'
 
 export async function POST(req: NextRequest) {
   try {
@@ -14,6 +15,9 @@ export async function POST(req: NextRequest) {
     if (!db) {
       return apiError('Database not configured', 500)
     }
+
+    // 🔧 AUTO-MIGRATE: create tables + seed admin if needed
+    await ensureDatabaseReady()
 
     const user = await db.user.findUnique({ where: { email } })
     if (!user || !user.passwordHash) {
@@ -52,6 +56,14 @@ export async function POST(req: NextRequest) {
         balance: user.balance,
         isAdmin: user.isAdmin,
         referralCode: user.referralCode,
+        totalProfit: user.totalProfit,
+        dailyProfit: user.dailyProfit,
+        monthlyProfit: user.monthlyProfit,
+        points: user.points,
+        vipLevel: user.vipLevel,
+        activePlan: null,
+        joinedAt: user.createdAt.toISOString(),
+        referrals: 0,
       }
     })
   } catch (error: any) {

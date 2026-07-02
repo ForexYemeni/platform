@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { db } from '@/lib/db'
 import { hashPassword, signToken, setSessionCookie, generateReferralCode, apiSuccess, apiError } from '@/lib/auth'
+import { ensureDatabaseReady } from '@/lib/auto-migrate'
 
 export async function POST(req: NextRequest) {
   try {
@@ -18,6 +19,9 @@ export async function POST(req: NextRequest) {
     if (!db) {
       return apiError('Database not configured', 500)
     }
+
+    // 🔧 AUTO-MIGRATE: create tables + seed admin if needed
+    await ensureDatabaseReady()
 
     // Check if user already exists
     const existing = await db.user.findUnique({ where: { email } })
