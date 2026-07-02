@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useState, useEffect } from 'react'
 import {
   LayoutDashboard, Cpu, ArrowDownToLine, ArrowUpFromLine,
-  Users, CheckSquare, Bell, Settings, Shield, X, LogOut, Crown
+  Users, CheckSquare, Bell, Settings, Shield, X, LogOut, Crown, Sparkles
 } from 'lucide-react'
 import { useAppStore, type View } from '@/lib/store'
 import { Logo } from '@/components/shared/logo'
