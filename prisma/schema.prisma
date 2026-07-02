@@ -278,3 +278,36 @@ model Session {
   @@index([userId])
   @@index([token])
 }
+
+// ============================================
+// Wallet Addresses (real deposit addresses managed by admin)
+// ============================================
+model WalletAddress {
+  id            String   @id @default(cuid())
+  currency      String   // BTC, ETH, USDT-TRC20, USDT-ERC20, BNB, LTC
+  network       String
+  address       String
+  qrCode        String?
+  label         String?
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  @@index([currency])
+  @@index([active])
+}
+
+// ============================================
+// Admin Activity Log
+// ============================================
+model AdminLog {
+  id            String   @id @default(cuid())
+  adminId       String
+  action        String
+  target        String?
+  details       String?
+  createdAt     DateTime @default(now())
+  
+  @@index([adminId])
+  @@index([createdAt])
+}

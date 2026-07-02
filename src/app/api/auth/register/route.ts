@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Create user
+    // Create user - NO welcome bonus, NO fake data
     const user = await db.user.create({
       data: {
         name,
@@ -57,33 +57,17 @@ export async function POST(req: NextRequest) {
         passwordHash,
         referralCode: refCode,
         referredById,
-        balance: 25, // Welcome bonus
+        balance: 0, // User starts with 0 balance - must deposit real money
+        totalProfit: 0,
+        dailyProfit: 0,
+        monthlyProfit: 0,
+        points: 0,
+        vipLevel: 1,
         lastLogin: new Date(),
       }
     })
 
-    // Create welcome bonus transaction
-    await db.transaction.create({
-      data: {
-        userId: user.id,
-        type: 'BONUS',
-        amount: 25,
-        currency: 'USDT',
-        description: 'Welcome bonus',
-      }
-    })
-
-    // Create welcome notification
-    await db.notification.create({
-      data: {
-        userId: user.id,
-        type: 'SUCCESS',
-        title: 'Welcome to CryptoMine!',
-        message: 'You received a $25 welcome bonus. Start investing now!',
-      }
-    })
-
-    // If referred, create notification for referrer
+    // If referred, create notification for referrer only (no fake bonus)
     if (referredById) {
       await db.notification.create({
         data: {

@@ -25,6 +25,8 @@ export async function POST(req: NextRequest) {
 
     // DROP everything first
     const dropStatements = [
+      `DROP TABLE IF EXISTS "AdminLog" CASCADE`,
+      `DROP TABLE IF EXISTS "WalletAddress" CASCADE`,
       `DROP TABLE IF EXISTS "Session" CASCADE`,
       `DROP TABLE IF EXISTS "Notification" CASCADE`,
       `DROP TABLE IF EXISTS "UserTask" CASCADE`,
@@ -265,6 +267,26 @@ async function createTablesRaw(db: any) {
       CONSTRAINT "Session_pkey" PRIMARY KEY ("id")
     )`,
     `CREATE UNIQUE INDEX IF NOT EXISTS "Session_token_key" ON "Session"("token")`,
+
+    `CREATE TABLE IF NOT EXISTS "WalletAddress" (
+      "id" TEXT NOT NULL, "currency" TEXT NOT NULL, "network" TEXT NOT NULL,
+      "address" TEXT NOT NULL, "qrCode" TEXT, "label" TEXT,
+      "active" BOOLEAN NOT NULL DEFAULT true,
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" TIMESTAMP(3) NOT NULL,
+      CONSTRAINT "WalletAddress_pkey" PRIMARY KEY ("id")
+    )`,
+    `CREATE INDEX IF NOT EXISTS "WalletAddress_currency_idx" ON "WalletAddress"("currency")`,
+    `CREATE INDEX IF NOT EXISTS "WalletAddress_active_idx" ON "WalletAddress"("active")`,
+
+    `CREATE TABLE IF NOT EXISTS "AdminLog" (
+      "id" TEXT NOT NULL, "adminId" TEXT NOT NULL, "action" TEXT NOT NULL,
+      "target" TEXT, "details" TEXT,
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT "AdminLog_pkey" PRIMARY KEY ("id")
+    )`,
+    `CREATE INDEX IF NOT EXISTS "AdminLog_adminId_idx" ON "AdminLog"("adminId")`,
+    `CREATE INDEX IF NOT EXISTS "AdminLog_createdAt_idx" ON "AdminLog"("createdAt")`,
 
     // Indexes
     `CREATE INDEX IF NOT EXISTS "User_email_idx" ON "User"("email")`,

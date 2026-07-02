@@ -1,7 +1,7 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Copy, Check, QrCode, ArrowDownRight, Clock, CheckCircle2, AlertCircle, Bitcoin } from 'lucide-react'
 import { useAppStore } from '@/lib/store'
 import { cryptos, mockTransactions } from '@/lib/data'
@@ -20,9 +20,55 @@ export function DepositsPage() {
   const [amount, setAmount] = useState('')
   const [copied, setCopied] = useState(false)
   const [step, setStep] = useState<'select' | 'address' | 'waiting'>('select')
+  const [realWallets, setRealWallets] = useState<Record<string, any[]>>({})
+  const [deposits, setDeposits] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+
+  // Fetch real wallet addresses and deposit history
+  useEffect(() => {
+    fetchData()
+  }, [])
+
+  const fetchData = async () => {
+    setLoading(true)
+    try {
+      const [walletsRes, depositsRes] = await Promise.all([
+        fetch('/api/user/wallets'),
+        fetch('/api/user/deposits'),
+      ])
+
+      if (walletsRes.ok) {
+        const data = await walletsRes.json()
+        if (data.success) setRealWallets(data.data.wallets || {})
+      }
+      if (depositsRes.ok) {
+        const data = await depositsRes.json()
+        if (data.success) setDeposits(data.data.deposits || [])
+      }
+    } catch (e) {
+      console.error('Fetch error:', e)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Get the real wallet address for selected crypto (from admin-managed wallets)
+  const getRealAddress = (): string => {
+    const wallets = realWallets[selectedCrypto.id] || realWallets[selectedCrypto.symbol]
+    if (wallets && wallets.length > 0) {
+      return wallets[0].address
+    }
+    return '' // No address configured - admin must add one
+  }
+
+  const hasRealAddress = (): boolean => {
+    return Boolean(getRealAddress())
+  }
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(selectedCrypto.address)
+    const addr = getRealAddress()
+    if (!addr) return
+    navigator.clipboard.writeText(addr)
     setCopied(true)
     toast.success(isRtl ? 'تم نسخ العنوان!' : 'Address copied!')
     setTimeout(() => setCopied(false), 2000)
@@ -33,17 +79,42 @@ export function DepositsPage() {
       toast.error(isRtl ? `الحد الأدنى للإيداع ${selectedCrypto.minDeposit} ${selectedCrypto.symbol}` : `Minimum deposit is ${selectedCrypto.minDeposit} ${selectedCrypto.symbol}`)
       return
     }
+    if (!hasRealAddress()) {
+      toast.error(isRtl
+        ? `لا يوجد عنوان ${selectedCrypto.symbol} مُكوّن بعد. تواصل مع الدعم.`
+        : `No ${selectedCrypto.symbol} address configured. Contact support.`
+      )
+      return
+    }
     setStep('address')
   }
 
-  const handleConfirmSent = () => {
+  const handleConfirmSent = async () => {
     setStep('waiting')
-    toast.success(isRtl ? 'في انتظار التأكيد...' : 'Awaiting confirmation...')
-    setTimeout(() => {
-      toast.success(isRtl ? 'تم تأكيد الإيداع!' : 'Deposit confirmed!')
+    try {
+      const res = await fetch('/api/user/deposits', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: parseFloat(amount),
+          currency: selectedCrypto.symbol,
+          network: selectedCrypto.network,
+        })
+      })
+      const data = await res.json()
+      if (data.success) {
+        toast.success(isRtl ? 'تم إنشاء طلب الإيداع!' : 'Deposit request created!')
+        fetchData()
+        setStep('select')
+        setAmount('')
+      } else {
+        toast.error(data.error || 'Failed')
+        setStep('select')
+      }
+    } catch (e) {
+      toast.error('Network error')
       setStep('select')
-      setAmount('')
-    }, 5000)
+    }
   }
 
   return (
@@ -170,7 +241,7 @@ export function DepositsPage() {
               <>
                 <div className="text-center mb-6">
                   <div className="inline-block p-4 rounded-2xl bg-white mb-4">
-                    <QRCode value={selectedCrypto.address} size={180} />
+                    <QRCode value={getRealAddress()} size={180} />
                   </div>
                   <Badge className="bg-[#00d4ff]/10 text-[#00d4ff] border-0 mb-2">
                     {selectedCrypto.name} • {selectedCrypto.network}
@@ -182,7 +253,7 @@ export function DepositsPage() {
                   <div className="flex gap-2">
                     <Input
                       readOnly
-                      value={selectedCrypto.address}
+                      value={getRealAddress()}
                       className="bg-white/5 font-mono text-sm"
                     />
                     <Button onClick={handleCopy} className="flex-shrink-0">
@@ -320,7 +391,13 @@ export function DepositsPage() {
                 </tr>
               </thead>
               <tbody>
-                {mockTransactions.filter(t => t.type === 'deposit').map((tx) => {
+                {deposits.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="py-8 text-center text-muted-foreground">
+                      {loading ? (isRtl ? 'جارٍ التحميل...' : 'Loading...') : (isRtl ? 'لا توجد إيداعات بعد' : 'No deposits yet')}
+                    </td>
+                  </tr>
+                ) : deposits.map((tx) => {
                   const crypto = cryptos.find(c => c.symbol === tx.currency) || cryptos[0]
                   return (
                     <tr key={tx.id} className="border-b border-border/50 hover:bg-accent/30 transition-colors">
@@ -336,19 +413,21 @@ export function DepositsPage() {
                         </div>
                       </td>
                       <td className="py-3 font-semibold text-emerald-400">+{tx.amount} {tx.currency}</td>
-                      <td className="py-3 hidden md:table-cell text-muted-foreground">{crypto.network}</td>
-                      <td className="py-3 hidden md:table-cell text-muted-foreground">{tx.date}</td>
+                      <td className="py-3 hidden md:table-cell text-muted-foreground">{tx.network}</td>
+                      <td className="py-3 hidden md:table-cell text-muted-foreground">
+                        {new Date(tx.createdAt).toLocaleString()}
+                      </td>
                       <td className="py-3">
                         <Badge
                           variant="outline"
                           className={
-                            tx.status === 'completed' ? 'border-emerald-500/30 text-emerald-400' :
-                            tx.status === 'pending' ? 'border-amber-500/30 text-amber-400' :
+                            tx.status === 'COMPLETED' ? 'border-emerald-500/30 text-emerald-400' :
+                            tx.status === 'PENDING' ? 'border-amber-500/30 text-amber-400' :
                             'border-red-500/30 text-red-400'
                           }
                         >
-                          {tx.status === 'completed' ? (isRtl ? 'مكتمل' : 'Completed') :
-                           tx.status === 'pending' ? (isRtl ? 'معلق' : 'Pending') :
+                          {tx.status === 'COMPLETED' ? (isRtl ? 'مكتمل' : 'Completed') :
+                           tx.status === 'PENDING' ? (isRtl ? 'معلق' : 'Pending') :
                            (isRtl ? 'مرفوض' : 'Rejected')}
                         </Badge>
                       </td>
