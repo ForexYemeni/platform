@@ -32,17 +32,26 @@ export async function POST(req: NextRequest) {
       return apiError('Missing required fields', 400)
     }
 
-    // Build the wallet key to search for (e.g., "USDT-TRC20")
+    // Build the wallet key to search for (e.g., "USDT-BEP20")
     const walletKey = `${currency}-${network}`
 
     // Find a REAL wallet address from admin-managed wallets
+    // Search with multiple strategies for maximum compatibility
     let address = ''
     const wallets = await db.walletAddress.findMany({
       where: {
         active: true,
         OR: [
+          // Exact currency match: "USDT-BEP20"
           { currency: walletKey },
+          // Case insensitive: "usdt-bep20"
+          { currency: { equals: walletKey, mode: 'insensitive' } },
+          // Currency + Network match: currency="USDT", network="BEP20"
           { currency: currency, network: network },
+          // Network only match (any USDT wallet on this network)
+          { network: { equals: network, mode: 'insensitive' } },
+          // Currency contains network: "USDT-BEP20" contains "BEP20"
+          { currency: { contains: network, mode: 'insensitive' } },
         ]
       }
     })
