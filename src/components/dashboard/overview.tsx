@@ -4,7 +4,7 @@ import { motion } from 'framer-motion'
 import { useState, useEffect } from 'react'
 import {
   Wallet, TrendingUp, TrendingDown, Users, Cpu, CheckCircle2,
-  ArrowUpRight, ArrowDownRight, Sparkles, Activity, Zap, Crown
+  ArrowUpRight, ArrowDownRight, Sparkles, Activity, Zap, Crown, Gift, Loader2
 } from 'lucide-react'
 import { LineChart, Line, AreaChart, Area, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid, BarChart, Bar } from 'recharts'
 import { useAppStore } from '@/lib/store'
@@ -12,17 +12,21 @@ import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
+import { toast } from 'sonner'
 
 export function DashboardOverview() {
-  const { lang, user, setView } = useAppStore()
+  const { lang, user, setView, fetchCurrentUser } = useAppStore()
   const isRtl = lang === 'ar'
   const [liveProfit, setLiveProfit] = useState(user?.dailyProfit || 0)
   const [dashboardData, setDashboardData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [rewards, setRewards] = useState<any[]>([])
+  const [claimingReward, setClaimingReward] = useState<string | null>(null)
 
-  // Fetch real dashboard data
+  // Fetch real dashboard data + rewards
   useEffect(() => {
     fetchDashboard()
+    fetchRewards()
   }, [])
 
   const fetchDashboard = async () => {
@@ -39,6 +43,39 @@ export function DashboardOverview() {
       console.error('Dashboard fetch error:', e)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchRewards = async () => {
+    try {
+      const res = await fetch('/api/user/rewards')
+      if (res.ok) {
+        const data = await res.json()
+        if (data.success) setRewards(data.data.rewards || [])
+      }
+    } catch (e) {}
+  }
+
+  const handleClaimReward = async (rewardId: string) => {
+    setClaimingReward(rewardId)
+    try {
+      const res = await fetch('/api/user/rewards', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rewardId })
+      })
+      const data = await res.json()
+      if (data.success) {
+        toast.success(isRtl ? `🎉 تم استلام ${data.data.claimed} USDT!` : `🎉 Claimed ${data.data.claimed} USDT!`)
+        fetchRewards()
+        fetchCurrentUser()
+      } else {
+        toast.error(data.error || 'Failed')
+      }
+    } catch (e) {
+      toast.error('Network error')
+    } finally {
+      setClaimingReward(null)
     }
   }
 
@@ -359,6 +396,66 @@ export function DashboardOverview() {
           </Card>
         </motion.div>
       </div>
+
+      {/* Rewards Section - Gift Cards */}
+      {rewards.length > 0 && (
+        <motion.div
+          initial={{ y: 20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ delay: 0.45 }}
+        >
+          <Card className="p-5 glass border-[#ffd700]/20 bg-gradient-to-br from-[#ffd700]/5 to-transparent">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold flex items-center gap-2">
+                <span className="text-2xl">🎁</span>
+                {isRtl ? 'مكافآتك' : 'Your Rewards'}
+              </h3>
+              <Badge className="bg-[#ffd700]/20 text-[#ffd700] border-0">
+                {rewards.length} {isRtl ? 'متاحة' : 'available'}
+              </Badge>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {rewards.map((reward) => (
+                <div
+                  key={reward.id}
+                  className="relative overflow-hidden rounded-2xl p-5 bg-gradient-to-br from-[#ffd700]/10 via-[#ff8c00]/5 to-[#9d4edd]/10 border border-[#ffd700]/20"
+                >
+                  <div className="absolute -top-10 -end-10 w-32 h-32 rounded-full bg-[#ffd700]/10 blur-2xl" />
+                  <div className="relative">
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-4xl">{reward.icon}</span>
+                      <Badge className="bg-[#ffd700]/20 text-[#ffd700] border-0">
+                        +${reward.amount}
+                      </Badge>
+                    </div>
+                    <h4 className="font-bold mb-1">
+                      {isRtl ? reward.titleAr : reward.title}
+                    </h4>
+                    <p className="text-xs text-muted-foreground mb-4">
+                      {isRtl ? reward.descriptionAr : reward.description}
+                    </p>
+                    <Button
+                      size="sm"
+                      className="w-full bg-gradient-to-r from-[#ffd700] to-[#ff8c00] text-black border-0 font-bold"
+                      disabled={claimingReward === reward.id}
+                      onClick={() => handleClaimReward(reward.id)}
+                    >
+                      {claimingReward === reward.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <>
+                          <Gift className="h-4 w-4 me-2" />
+                          {isRtl ? 'استلام الهدية' : 'Claim Gift'}
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </motion.div>
+      )}
 
       {/* Active plan + recent transactions */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">

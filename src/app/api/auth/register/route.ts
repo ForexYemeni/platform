@@ -16,11 +16,15 @@ export async function POST(req: NextRequest) {
       return apiError('Password must be at least 6 characters', 400)
     }
 
+    // MANDATORY referral code - user cannot register without one
+    if (!referralCode || referralCode.trim().length === 0) {
+      return apiError('Referral code is required. Use the admin referral code: ADMIN001', 400)
+    }
+
     if (!db) {
       return apiError('Database not configured', 500)
     }
 
-    // 🔧 AUTO-MIGRATE: create tables + seed admin if needed
     await ensureDatabaseReady()
 
     // Check if user already exists
@@ -29,10 +33,16 @@ export async function POST(req: NextRequest) {
       return apiError('Email already registered', 409)
     }
 
+    // Validate referral code - must exist in database
+    const referrer = await db.user.findUnique({ where: { referralCode: referralCode.trim().toUpperCase() } })
+    if (!referrer) {
+      return apiError('Invalid referral code. Please check and try again.', 400)
+    }
+
     // Hash password
     const passwordHash = await hashPassword(password)
 
-    // Generate unique referral code
+    // Generate unique referral code for new user
     let refCode = generateReferralCode(name)
     let codeExists = await db.user.findUnique({ where: { referralCode: refCode } })
     while (codeExists) {
@@ -40,24 +50,15 @@ export async function POST(req: NextRequest) {
       codeExists = await db.user.findUnique({ where: { referralCode: refCode } })
     }
 
-    // Find referrer (if any)
-    let referredById: string | null = null
-    if (referralCode) {
-      const referrer = await db.user.findUnique({ where: { referralCode } })
-      if (referrer) {
-        referredById = referrer.id
-      }
-    }
-
-    // Create user - NO welcome bonus, NO fake data
+    // Create user with referrer
     const user = await db.user.create({
       data: {
         name,
         email,
         passwordHash,
         referralCode: refCode,
-        referredById,
-        balance: 0, // User starts with 0 balance - must deposit real money
+        referredById: referrer.id,
+        balance: 0,
         totalProfit: 0,
         dailyProfit: 0,
         monthlyProfit: 0,
@@ -67,17 +68,25 @@ export async function POST(req: NextRequest) {
       }
     })
 
-    // If referred, create notification for referrer only (no fake bonus)
-    if (referredById) {
-      await db.notification.create({
-        data: {
-          userId: referredById,
-          type: 'SUCCESS',
-          title: 'New Referral!',
-          message: `${name || 'A new user'} joined using your referral link`,
-        }
-      })
-    }
+    // Create notification for referrer
+    await db.notification.create({
+      data: {
+        userId: referrer.id,
+        type: 'SUCCESS',
+        title: '🎉 New Referral!',
+        message: `${name || 'A new user'} joined using your referral code. You'll earn commissions when they invest.`,
+      }
+    })
+
+    // Create welcome notification for new user
+    await db.notification.create({
+      data: {
+        userId: user.id,
+        type: 'INFO',
+        title: 'Welcome to CryptoMine!',
+        message: `You were referred by ${referrer.name || referrer.email}. Start by depositing USDT to activate a mining plan.`,
+      }
+    })
 
     // Generate JWT
     const token = signToken({
@@ -96,6 +105,7 @@ export async function POST(req: NextRequest) {
         email: user.email,
         balance: user.balance,
         referralCode: user.referralCode,
+        isAdmin: user.isAdmin,
       }
     }, 201)
   } catch (error: any) {

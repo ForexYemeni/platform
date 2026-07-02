@@ -219,6 +219,21 @@ async function createTablesRaw(db: any) {
     `CREATE INDEX IF NOT EXISTS "AdminLog_adminId_idx" ON "AdminLog"("adminId")`,
     `CREATE INDEX IF NOT EXISTS "AdminLog_createdAt_idx" ON "AdminLog"("createdAt")`,
 
+    `CREATE TABLE IF NOT EXISTS "Reward" (
+      "id" TEXT NOT NULL, "userId" TEXT NOT NULL,
+      "title" TEXT NOT NULL, "titleAr" TEXT NOT NULL,
+      "description" TEXT NOT NULL, "descriptionAr" TEXT NOT NULL,
+      "amount" DOUBLE PRECISION NOT NULL, "currency" TEXT NOT NULL DEFAULT 'USDT',
+      "type" TEXT NOT NULL DEFAULT 'GIFT', "icon" TEXT NOT NULL DEFAULT '🎁',
+      "claimed" BOOLEAN NOT NULL DEFAULT false, "claimedAt" TIMESTAMP(3),
+      "expiresAt" TIMESTAMP(3),
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT "Reward_pkey" PRIMARY KEY ("id")
+    )`,
+    `CREATE INDEX IF NOT EXISTS "Reward_userId_idx" ON "Reward"("userId")`,
+    `CREATE INDEX IF NOT EXISTS "Reward_claimed_idx" ON "Reward"("claimed")`,
+    `ALTER TABLE "Reward" ADD CONSTRAINT IF NOT EXISTS "Reward_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE`,
+
     `CREATE INDEX IF NOT EXISTS "User_email_idx" ON "User"("email")`,
     `CREATE INDEX IF NOT EXISTS "User_referralCode_idx" ON "User"("referralCode")`,
     `CREATE INDEX IF NOT EXISTS "User_referredById_idx" ON "User"("referredById")`,

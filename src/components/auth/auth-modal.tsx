@@ -17,6 +17,7 @@ export function AuthModal() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')
+  const [referralCode, setReferralCode] = useState('ADMIN001')
   const [otp, setOtp] = useState(['', '', '', '', '', ''])
   const [countdown, setCountdown] = useState(45)
   const [loading, setLoading] = useState(false)
@@ -46,7 +47,7 @@ export function AuthModal() {
     try {
       const endpoint = authStage === 'login' ? '/api/auth/login' : '/api/auth/register'
       const body = authStage === 'register'
-        ? { name, email, password }
+        ? { name, email, password, referralCode }
         : { email, password }
 
       const res = await fetch(endpoint, {
@@ -302,6 +303,27 @@ export function AuthModal() {
                             onChange={(e) => setName(e.target.value)}
                           />
                         </div>
+                      </div>
+                    )}
+                    {authStage === 'register' && (
+                      <div className="space-y-2">
+                        <Label className="flex items-center gap-1.5">
+                          {isRtl ? 'رمز الدعوة' : 'Referral Code'}
+                          <span className="text-red-400 text-[10px] font-bold px-1.5 py-0.5 rounded bg-red-500/10">{isRtl ? 'إجباري' : 'REQUIRED'}</span>
+                        </Label>
+                        <div className="relative">
+                          <KeyRound className="absolute top-1/2 -translate-y-1/2 start-3 h-4 w-4 text-[#ffd700]" />
+                          <Input
+                            required
+                            placeholder={isRtl ? 'ADMIN001 أو رمز دعوة من صديق' : 'ADMIN001 or friend\'s code'}
+                            className="ps-10 bg-white/5 font-mono uppercase"
+                            value={referralCode}
+                            onChange={(e) => setReferralCode(e.target.value.toUpperCase())}
+                          />
+                        </div>
+                        <p className="text-[10px] text-muted-foreground">
+                          {isRtl ? '📝 لا يمكن إنشاء حساب بدون رمز دعوة. استخدم ADMIN001 إذا لم يكن لديك واحد.' : '📝 Cannot register without a referral code. Use ADMIN001 if you don\'t have one.'}
+                        </p>
                       </div>
                     )}
                     <div className="space-y-2">

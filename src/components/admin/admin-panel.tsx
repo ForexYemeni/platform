@@ -6,7 +6,7 @@ import {
   Users, DollarSign, TrendingUp, TrendingDown, Search, MoreHorizontal,
   Shield, CheckCircle2, XCircle, Clock, Ban, Edit, Send, Plus,
   Cpu, CreditCard, CheckSquare, Settings, Activity, Crown, AlertCircle, Save,
-  Trash2, Wallet, X, Loader2
+  Trash2, Wallet, X, Loader2, Gift
 } from 'lucide-react'
 import { AreaChart, Area, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid, PieChart, Pie, Cell } from 'recharts'
 import { useAppStore } from '@/lib/store'
@@ -248,6 +248,7 @@ export function AdminPanel() {
           <TabsTrigger value="plans"><Cpu className="h-4 w-4 me-2" />{isRtl ? 'الخطط' : 'Plans'}</TabsTrigger>
           <TabsTrigger value="tasks"><CheckSquare className="h-4 w-4 me-2" />{isRtl ? 'المهام' : 'Tasks'}</TabsTrigger>
           <TabsTrigger value="wallets"><Wallet className="h-4 w-4 me-2" />{isRtl ? 'المحافظ' : 'Wallets'}</TabsTrigger>
+          <TabsTrigger value="rewards"><Gift className="h-4 w-4 me-2" />{isRtl ? 'المكافآت' : 'Rewards'}</TabsTrigger>
           <TabsTrigger value="settings"><Settings className="h-4 w-4 me-2" />{isRtl ? 'الإعدادات' : 'Settings'}</TabsTrigger>
         </TabsList>
 
@@ -366,6 +367,11 @@ export function AdminPanel() {
         {/* === WALLETS === */}
         <TabsContent value="wallets">
           <WalletsManager wallets={wallets} loading={loading} onRefresh={fetchAllData} />
+        </TabsContent>
+
+        {/* === REWARDS === */}
+        <TabsContent value="rewards">
+          <RewardsManager users={realUsers} onRefresh={fetchAllData} />
         </TabsContent>
 
         {/* === SETTINGS === */}
@@ -843,6 +849,184 @@ function WalletForm({ wallet, saving, onSave, onCancel }: { wallet: Wallet | nul
       <div className="flex gap-2 mt-4">
         <Button onClick={handleSave} disabled={saving || !form.address} className="flex-1 bg-gradient-to-r from-[#00d4ff] to-[#9d4edd] text-white border-0">
           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Save className="h-4 w-4 me-1" />{isRtl ? 'حفظ' : 'Save'}</>}
+        </Button>
+        <Button variant="outline" className="glass" onClick={onCancel}>{isRtl ? 'إلغاء' : 'Cancel'}</Button>
+      </div>
+    </div>
+  )
+}
+
+// ============================================
+// REWARDS MANAGER - Admin creates gifts for users
+// ============================================
+function RewardsManager({ users, onRefresh }: { users: any[], onRefresh: () => void }) {
+  const { lang } = useAppStore()
+  const isRtl = lang === 'ar'
+  const [rewards, setRewards] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [showForm, setShowForm] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [selectedUser, setSelectedUser] = useState<string>('')
+
+  const fetchRewards = async () => {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/admin/rewards')
+      if (res.ok) {
+        const data = await res.json()
+        if (data.success) setRewards(data.data.rewards || [])
+      }
+    } catch (e) {}
+    finally { setLoading(false) }
+  }
+
+  useEffect(() => { fetchRewards() }, [])
+
+  const handleSave = async (data: any) => {
+    setSaving(true)
+    try {
+      const res = await fetch('/api/admin/rewards', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      })
+      const d = await res.json()
+      if (d.success) {
+        toast.success(isRtl ? 'تم إرسال المكافأة للمستخدم!' : 'Reward sent to user!')
+        setShowForm(false)
+        fetchRewards()
+      } else toast.error(d.error)
+    } catch (e) { toast.error('Network error') }
+    finally { setSaving(false) }
+  }
+
+  const handleDelete = async (id: string) => {
+    if (!confirm(isRtl ? 'حذف المكافأة؟' : 'Delete reward?')) return
+    const res = await fetch(`/api/admin/rewards?id=${id}`, { method: 'DELETE' })
+    const d = await res.json()
+    if (d.success) { toast.success(isRtl ? 'تم الحذف' : 'Deleted'); fetchRewards() }
+    else toast.error(d.error)
+  }
+
+  return (
+    <Card className="p-5 glass border-white/5">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h3 className="font-bold flex items-center gap-2">
+            <Gift className="h-5 w-5 text-[#ffd700]" />
+            {isRtl ? 'إدارة المكافآت' : 'Rewards Management'}
+          </h3>
+          <p className="text-xs text-muted-foreground mt-1">
+            {isRtl ? 'أرسل مكافآت وهدايا للمستخدمين (تظهر كبطاقة هدية 🎁)' : 'Send rewards and gifts to users (shown as gift card 🎁)'}
+          </p>
+        </div>
+        <Button size="sm" className="bg-gradient-to-r from-[#ffd700] to-[#ff8c00] text-black border-0" onClick={() => setShowForm(true)}>
+          <Plus className="h-4 w-4 me-1" />{isRtl ? 'إرسال مكافأة' : 'Send Reward'}
+        </Button>
+      </div>
+
+      {showForm && (
+        <RewardForm
+          users={users}
+          saving={saving}
+          onSave={handleSave}
+          onCancel={() => setShowForm(false)}
+        />
+      )}
+
+      {loading ? (
+        <div className="flex justify-center py-8"><Loader2 className="h-8 w-8 animate-spin text-[#ffd700]" /></div>
+      ) : rewards.length === 0 ? (
+        <div className="text-center py-12">
+          <Gift className="h-12 w-12 text-muted-foreground/30 mx-auto mb-3" />
+          <p className="text-sm text-muted-foreground">{isRtl ? 'لا توجد مكافآت مُرسلة بعد' : 'No rewards sent yet'}</p>
+        </div>
+      ) : (
+        <div className="space-y-2 mt-4">
+          {rewards.map((r) => (
+            <div key={r.id} className="flex items-center gap-3 p-3 rounded-xl glass border border-white/10">
+              <span className="text-2xl">{r.icon}</span>
+              <div className="flex-1 min-w-0">
+                <div className="font-medium text-sm">{r.title}</div>
+                <div className="text-xs text-muted-foreground">
+                  {isRtl ? 'المستخدم:' : 'User:'} {r.user?.name || r.user?.email || 'Unknown'}
+                </div>
+              </div>
+              <Badge className="bg-[#ffd700]/20 text-[#ffd700] border-0">+{r.amount} {r.currency}</Badge>
+              <Badge className={r.claimed ? 'bg-emerald-500/20 text-emerald-400 border-0' : 'bg-amber-500/20 text-amber-400 border-0'}>
+                {r.claimed ? (isRtl ? 'تم الاستلام' : 'Claimed') : (isRtl ? 'في الانتظار' : 'Pending')}
+              </Badge>
+              <Button size="sm" variant="outline" className="glass" onClick={() => handleDelete(r.id)}>
+                <Trash2 className="h-3 w-3 text-red-400" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  )
+}
+
+function RewardForm({ users, saving, onSave, onCancel }: { users: any[], saving: boolean, onSave: (data: any) => void, onCancel: () => void }) {
+  const { lang } = useAppStore()
+  const isRtl = lang === 'ar'
+  const [form, setForm] = useState({
+    userId: '',
+    title: '',
+    titleAr: '',
+    description: '',
+    descriptionAr: '',
+    amount: 10,
+    currency: 'USDT',
+    type: 'GIFT',
+    icon: '🎁',
+  })
+
+  // Filter out admin users
+  const regularUsers = users.filter(u => !u.isAdmin)
+
+  return (
+    <div className="p-4 rounded-2xl glass border-[#ffd700]/20 mb-4">
+      <div className="flex items-center justify-between mb-4">
+        <h4 className="font-bold flex items-center gap-2">
+          <Gift className="h-4 w-4 text-[#ffd700]" />
+          {isRtl ? 'إرسال مكافأة جديدة' : 'Send New Reward'}
+        </h4>
+        <button onClick={onCancel}><X className="h-4 w-4" /></button>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div className="col-span-2">
+          <Label>{isRtl ? 'المستخدم' : 'User'}</Label>
+          <select value={form.userId} onChange={e => setForm({...form, userId: e.target.value})} className="w-full h-10 px-3 rounded-lg bg-white/5 border border-border">
+            <option value="">{isRtl ? 'اختر مستخدم...' : 'Select user...'}</option>
+            {regularUsers.map((u) => (
+              <option key={u.id} value={u.id}>{u.name} ({u.email})</option>
+            ))}
+          </select>
+        </div>
+        <div><Label>{isRtl ? 'العنوان (EN)' : 'Title (EN)'}</Label><Input value={form.title} onChange={e => setForm({...form, title: e.target.value})} placeholder="Invite 5 Friends Reward" className="bg-white/5" /></div>
+        <div><Label>{isRtl ? 'العنوان (AR)' : 'Title (AR)'}</Label><Input value={form.titleAr} onChange={e => setForm({...form, titleAr: e.target.value})} placeholder="مكافأة دعوة 5 أصدقاء" className="bg-white/5" /></div>
+        <div><Label>{isRtl ? 'الوصف (EN)' : 'Desc (EN)'}</Label><Input value={form.description} onChange={e => setForm({...form, description: e.target.value})} placeholder="Thank you for inviting 5 active friends!" className="bg-white/5" /></div>
+        <div><Label>{isRtl ? 'الوصف (AR)' : 'Desc (AR)'}</Label><Input value={form.descriptionAr} onChange={e => setForm({...form, descriptionAr: e.target.value})} placeholder="شكراً لدعوة 5 أصدقاء نشطين!" className="bg-white/5" /></div>
+        <div><Label>{isRtl ? 'المبلغ' : 'Amount'}</Label><Input type="number" step="0.1" value={form.amount} onChange={e => setForm({...form, amount: parseFloat(e.target.value)})} className="bg-white/5" /></div>
+        <div>
+          <Label>{isRtl ? 'النوع' : 'Type'}</Label>
+          <select value={form.type} onChange={e => setForm({...form, type: e.target.value})} className="w-full h-9 px-3 rounded-lg bg-white/5 border border-border">
+            <option value="GIFT">{isRtl ? '🎁 هدية' : '🎁 Gift'}</option>
+            <option value="BONUS">{isRtl ? '💎 مكافأة' : '💎 Bonus'}</option>
+            <option value="MILESTONE">{isRtl ? '🏆 إنجاز' : '🏆 Milestone'}</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="flex gap-2 mt-4">
+        <Button
+          onClick={() => onSave(form)}
+          disabled={saving || !form.userId || !form.title}
+          className="flex-1 bg-gradient-to-r from-[#ffd700] to-[#ff8c00] text-black border-0"
+        >
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Gift className="h-4 w-4 me-1" />{isRtl ? 'إرسال المكافأة' : 'Send Reward'}</>}
         </Button>
         <Button variant="outline" className="glass" onClick={onCancel}>{isRtl ? 'إلغاء' : 'Cancel'}</Button>
       </div>

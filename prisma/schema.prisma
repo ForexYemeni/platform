@@ -78,6 +78,7 @@ model User {
   notifications    Notification[]
   referralEarnings        ReferralEarning[] @relation("ReferrerEarnings")
   referredInEarnings      ReferralEarning[] @relation("ReferredInEarnings")
+  rewards          Reward[]
   
   @@index([email])
   @@index([referralCode])
@@ -310,4 +311,28 @@ model AdminLog {
   
   @@index([adminId])
   @@index([createdAt])
+}
+
+// ============================================
+// Rewards (admin-created gifts for users)
+// ============================================
+model Reward {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title         String
+  titleAr       String
+  description   String
+  descriptionAr String
+  amount        Float
+  currency      String   @default("USDT")
+  type          String   @default("GIFT") // GIFT, BONUS, MILESTONE
+  icon          String   @default("🎁")
+  claimed       Boolean  @default(false)
+  claimedAt     DateTime?
+  expiresAt     DateTime?
+  createdAt     DateTime @default(now())
+  
+  @@index([userId])
+  @@index([claimed])
 }
