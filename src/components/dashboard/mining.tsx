@@ -1,8 +1,8 @@
 'use client'
 
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useState, useEffect } from 'react'
-import { Cpu, Clock, RefreshCw, Crown, Zap, Loader2 } from 'lucide-react'
+import { Cpu, Clock, RefreshCw, Crown, Zap, Loader2, X, AlertCircle, CheckCircle2, TrendingUp } from 'lucide-react'
 import { useAppStore } from '@/lib/store'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -83,18 +83,33 @@ export function MiningPage() {
     return () => clearInterval(interval)
   }, [user?.planExpiresAt, hasActivePlan])
 
-  // Live profit counter - only if user has active plan
+  // Live profit counter - REAL cumulative calculation
+  // Profit accrues continuously based on time elapsed since plan activation
   useEffect(() => {
-    if (!hasActivePlan || !user?.dailyProfit) {
+    if (!hasActivePlan || !user?.dailyProfit || !user?.planActivatedAt || !user?.activePlan) {
       setLiveProfit(0)
       return
     }
-    setLiveProfit(user.dailyProfit)
-    const interval = setInterval(() => {
-      setLiveProfit(p => p + Math.random() * 0.0001)
-    }, 3000)
+
+    const dailyProfitAmount = user.activePlan.investment * user.activePlan.dailyProfit / 100
+    const planActivatedAt = new Date(user.planActivatedAt).getTime()
+
+    const calcProfit = () => {
+      const now = Date.now()
+      const elapsedMs = now - planActivatedAt
+      const elapsedDays = elapsedMs / (1000 * 60 * 60 * 24)
+      // Profit = dailyProfit * days elapsed (continuous accrual)
+      const earned = dailyProfitAmount * elapsedDays
+      // Subtract already-claimed profit (totalProfit represents claimed/credited amount)
+      const unclaimed = Math.max(0, earned - (user.totalProfit || 0))
+      setLiveProfit(unclaimed)
+    }
+
+    calcProfit()
+    // Update every second for smooth counter
+    const interval = setInterval(calcProfit, 1000)
     return () => clearInterval(interval)
-  }, [hasActivePlan, user?.dailyProfit])
+  }, [hasActivePlan, user?.dailyProfit, user?.planActivatedAt, user?.activePlan, user?.totalProfit])
 
   const handleActivate = async (planId: string) => {
     if (!user) {
@@ -122,7 +137,11 @@ export function MiningPage() {
     }
   }
 
+  const [showReinvestModal, setShowReinvestModal] = useState(false)
+  const [reinvesting, setReinvesting] = useState(false)
+
   const handleReinvest = async () => {
+    setReinvesting(true)
     try {
       const res = await fetch('/api/user/mining', {
         method: 'POST',
@@ -131,13 +150,16 @@ export function MiningPage() {
       })
       const data = await res.json()
       if (data.success) {
-        toast.success(isRtl ? `تمت إعادة استثمار $${data.data.amount}!` : `Reinvested $${data.data.amount}!`)
+        toast.success(isRtl ? `تمت إضافة $${data.data.amount} لرصيدك!` : `Added $${data.data.amount} to your balance!`)
+        setShowReinvestModal(false)
         await fetchCurrentUser()
       } else {
         toast.error(data.error || 'Failed')
       }
     } catch (e) {
       toast.error(isRtl ? 'خطأ في الشبكة' : 'Network error')
+    } finally {
+      setReinvesting(false)
     }
   }
 
@@ -276,11 +298,11 @@ export function MiningPage() {
               {/* Actions */}
               <div className="flex flex-col sm:flex-row gap-3">
                 <Button
-                  onClick={handleReinvest}
+                  onClick={() => setShowReinvestModal(true)}
                   className="flex-1 bg-gradient-to-r from-[#00d4ff] to-[#9d4edd] text-white border-0"
                 >
                   <RefreshCw className="h-4 w-4 me-2" />
-                  {isRtl ? 'إعادة استثمار الأرباح' : 'Reinvest Profits'}
+                  {isRtl ? 'سحب الأرباح المتراكمة' : 'Withdraw Accumulated Profits'}
                 </Button>
               </div>
             </div>
@@ -365,6 +387,21 @@ export function MiningPage() {
                         <span className="font-semibold">{plan.hashrate}</span>
                       </div>
                     </div>
+
+                    {/* Total expected profit - REAL calculation */}
+                    <div className="mt-3 p-3 rounded-xl bg-gradient-to-br from-[#10b981]/10 to-[#ffd700]/10 border border-[#10b981]/20">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-muted-foreground">{isRtl ? 'إجمالي الأرباح المتوقعة' : 'Total Expected Profit'}</span>
+                        <span className="text-base font-black text-emerald-400">
+                          +${(plan.investment * plan.dailyProfit * plan.duration / 100).toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="text-[10px] text-muted-foreground mt-1">
+                        {isRtl
+                          ? `${plan.dailyProfit}% × ${plan.duration} يوم = ${(plan.dailyProfit * plan.duration).toFixed(0)}% عائد`
+                          : `${plan.dailyProfit}% × ${plan.duration} days = ${(plan.dailyProfit * plan.duration).toFixed(0)}% return`}
+                      </div>
+                    </div>
                     {!isCurrent && (
                       <Button
                         size="sm"
@@ -388,6 +425,129 @@ export function MiningPage() {
           </div>
         )}
       </motion.div>
+
+      {/* Reinvest/Withdraw Approval Modal */}
+      <AnimatePresence>
+        {showReinvestModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => !reinvesting && setShowReinvestModal(false)}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20, opacity: 0 }}
+              animate={{ scale: 1, y: 0, opacity: 1 }}
+              exit={{ scale: 0.9, y: 20, opacity: 0 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              onClick={(e) => e.stopPropagation()}
+              className="relative w-full max-w-md"
+            >
+              <div className="relative glass rounded-3xl border-white/10 overflow-hidden">
+                {/* Background effects */}
+                <div className="absolute -top-20 -right-20 w-60 h-60 rounded-full bg-[#10b981]/20 blur-3xl" />
+                <div className="absolute -bottom-20 -left-20 w-60 h-60 rounded-full bg-[#ffd700]/20 blur-3xl" />
+
+                {/* Close button */}
+                <button
+                  onClick={() => !reinvesting && setShowReinvestModal(false)}
+                  className="absolute top-4 end-4 z-20 w-9 h-9 rounded-full glass flex items-center justify-center hover:bg-white/10"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+
+                <div className="relative p-8">
+                  {/* Icon */}
+                  <div className="w-16 h-16 rounded-3xl bg-gradient-to-br from-[#10b981] to-[#ffd700] flex items-center justify-center mx-auto mb-4">
+                    <TrendingUp className="h-8 w-8 text-white" />
+                  </div>
+
+                  {/* Title */}
+                  <h3 className="text-xl font-bold text-center mb-2">
+                    {isRtl ? 'سحب الأرباح المتراكمة' : 'Withdraw Accumulated Profits'}
+                  </h3>
+                  <p className="text-sm text-muted-foreground text-center mb-6">
+                    {isRtl
+                      ? 'سيتم إضافة أرباحك المتراكمة إلى رصيدك القابل للسحب'
+                      : 'Your accumulated profits will be added to your withdrawable balance'}
+                  </p>
+
+                  {/* Amount display */}
+                  <div className="p-6 rounded-2xl bg-gradient-to-br from-[#10b981]/10 to-[#ffd700]/10 border border-[#10b981]/20 mb-6">
+                    <div className="text-xs text-muted-foreground text-center mb-1">
+                      {isRtl ? 'الأرباح المتراكمة' : 'Accumulated Profit'}
+                    </div>
+                    <div className="text-4xl font-black text-center text-gradient-electric">
+                      ${liveProfit.toFixed(6)}
+                    </div>
+                  </div>
+
+                  {/* Details */}
+                  <div className="space-y-2 mb-6">
+                    <div className="flex justify-between text-sm p-3 rounded-xl glass">
+                      <span className="text-muted-foreground">{isRtl ? 'الخطة النشطة' : 'Active Plan'}</span>
+                      <span className="font-medium">{isRtl ? user?.activePlan?.nameAr : user?.activePlan?.name}</span>
+                    </div>
+                    <div className="flex justify-between text-sm p-3 rounded-xl glass">
+                      <span className="text-muted-foreground">{isRtl ? 'الربح اليومي' : 'Daily Profit'}</span>
+                      <span className="font-medium text-emerald-400">
+                        +${(user?.activePlan ? user.activePlan.investment * user.activePlan.dailyProfit / 100 : 0).toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm p-3 rounded-xl glass">
+                      <span className="text-muted-foreground">{isRtl ? 'مدة التراكم' : 'Accrual Period'}</span>
+                      <span className="font-medium">
+                        {user?.planActivatedAt
+                          ? `${Math.floor((Date.now() - new Date(user.planActivatedAt).getTime()) / (1000 * 60 * 60 * 24))} ${isRtl ? 'يوم' : 'days'}`
+                          : '-'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Warning */}
+                  <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 mb-6">
+                    <div className="flex items-start gap-2">
+                      <AlertCircle className="h-4 w-4 text-amber-400 flex-shrink-0 mt-0.5" />
+                      <p className="text-xs text-amber-200/80">
+                        {isRtl
+                          ? 'بعد السحب، سيبدأ عداد الأرباح من جديد. يمكنك السحب في أي وقت.'
+                          : 'After withdrawal, the profit counter will reset. You can withdraw anytime.'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex gap-3">
+                    <Button
+                      variant="outline"
+                      className="flex-1 glass"
+                      onClick={() => setShowReinvestModal(false)}
+                      disabled={reinvesting}
+                    >
+                      {isRtl ? 'إلغاء' : 'Cancel'}
+                    </Button>
+                    <Button
+                      onClick={handleReinvest}
+                      disabled={reinvesting || liveProfit <= 0}
+                      className="flex-1 bg-gradient-to-r from-[#10b981] to-[#ffd700] text-white border-0"
+                    >
+                      {reinvesting ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <>
+                          <CheckCircle2 className="h-4 w-4 me-2" />
+                          {isRtl ? 'تأكيد السحب' : 'Confirm Withdrawal'}
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

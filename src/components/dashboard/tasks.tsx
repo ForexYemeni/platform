@@ -2,7 +2,7 @@
 
 import { motion } from 'framer-motion'
 import { useState, useEffect } from 'react'
-import { CheckCircle2, Play, Twitter, Users, Link as LinkIcon, Calendar, Crown, Gift, Sparkles, ChevronRight, Loader2 } from 'lucide-react'
+import { CheckCircle2, Gift, Sparkles, Calendar, ChevronRight, Loader2, Clock, Lock } from 'lucide-react'
 import { useAppStore } from '@/lib/store'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -23,7 +23,12 @@ interface Task {
   icon: string
   total: number | null
   active: boolean
-  userTasks?: any[]
+  userTask?: any
+  status: string // available, completed, cooldown
+  cooldownEndsAt: number | null
+  canRetry: boolean
+  completed: boolean
+  claimed: boolean
 }
 
 export function TasksPage() {
@@ -33,9 +38,11 @@ export function TasksPage() {
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
 
-  // Fetch real tasks from API
   useEffect(() => {
     fetchTasks()
+    // Refresh every minute to update cooldown timers
+    const interval = setInterval(fetchTasks, 60000)
+    return () => clearInterval(interval)
   }, [])
 
   const fetchTasks = async () => {
@@ -44,10 +51,7 @@ export function TasksPage() {
       const res = await fetch('/api/user/tasks')
       if (res.ok) {
         const data = await res.json()
-        if (data.success) {
-          // Only ACTIVE tasks are returned from API
-          setTasks(data.data.tasks || [])
-        }
+        if (data.success) setTasks(data.data.tasks || [])
       }
     } catch (e) {
       console.error('Failed to fetch tasks:', e)
@@ -92,7 +96,7 @@ export function TasksPage() {
       })
       const data = await res.json()
       if (data.success) {
-        toast.success(isRtl ? 'تم إكمال المهمة!' : 'Task completed!')
+        toast.success(isRtl ? 'تم إكمال المهمة! استلم مكافأتك' : 'Task completed! Claim your reward')
         fetchTasks()
       } else {
         toast.error(data.error || 'Failed')
@@ -108,16 +112,8 @@ export function TasksPage() {
   const weeklyTasks = tasks.filter(t => t.type === 'WEEKLY')
   const specialTasks = tasks.filter(t => t.type === 'SPECIAL')
 
-  // Get user task state
-  const getUserTask = (task: Task) => {
-    return task.userTasks?.[0] || null
-  }
-
-  const completedCount = tasks.filter(t => getUserTask(t)?.completed).length
-  const totalReward = tasks.filter(t => {
-    const ut = getUserTask(t)
-    return ut?.completed && !ut?.claimed && t.rewardType === 'USDT'
-  }).reduce((s, t) => s + t.reward, 0)
+  const completedCount = tasks.filter(t => t.completed || t.status === 'cooldown').length
+  const totalReward = tasks.filter(t => t.completed && !t.claimed && t.rewardType === 'USDT').reduce((s, t) => s + t.reward, 0)
 
   const stats = [
     { label: isRtl ? 'مهام مكتملة' : 'Tasks Completed', value: `${completedCount}/${tasks.length}`, icon: CheckCircle2, color: '#10b981' },
@@ -126,11 +122,21 @@ export function TasksPage() {
     { label: isRtl ? 'تتابع' : 'Day Streak', value: '0', icon: Calendar, color: '#00d4ff' },
   ]
 
+  // Format remaining cooldown time
+  const formatCooldown = (endsAt: number | null) => {
+    if (!endsAt) return ''
+    const remaining = endsAt - Date.now()
+    if (remaining <= 0) return ''
+    const hours = Math.floor(remaining / (60 * 60 * 1000))
+    const minutes = Math.floor((remaining % (60 * 60 * 1000)) / (60 * 1000))
+    return `${hours}h ${minutes}m`
+  }
+
   const renderTaskCard = (task: Task) => {
-    const userTask = getUserTask(task)
-    const completed = userTask?.completed || false
-    const claimed = userTask?.claimed || false
-    const progress = userTask?.progress || 0
+    const isCooldown = task.status === 'cooldown'
+    const isCompleted = task.status === 'completed'
+    const isAvailable = task.status === 'available'
+    const cooldownText = formatCooldown(task.cooldownEndsAt)
 
     return (
       <motion.div
@@ -139,9 +145,9 @@ export function TasksPage() {
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         className={`p-4 rounded-2xl border transition-all ${
-          claimed
-            ? 'border-emerald-500/20 bg-emerald-500/5 opacity-60'
-            : completed
+          isCooldown
+            ? 'border-blue-500/20 bg-blue-500/5'
+            : isCompleted
             ? 'border-[#ffd700]/30 bg-[#ffd700]/5'
             : 'border-white/5 glass hover:border-white/10'
         }`}
@@ -149,7 +155,7 @@ export function TasksPage() {
         <div className="flex items-start gap-3">
           <div
             className={`w-12 h-12 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0 ${
-              completed ? 'bg-[#ffd700]/20' : 'bg-white/5'
+              isCooldown ? 'bg-blue-500/20' : isCompleted ? 'bg-[#ffd700]/20' : 'bg-white/5'
             }`}
           >
             {task.icon}
@@ -167,23 +173,32 @@ export function TasksPage() {
               {isRtl ? task.descriptionAr : task.description}
             </p>
 
+            {isCooldown && (
+              <div className="mb-3 p-2 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center gap-2">
+                <Clock className="h-3.5 w-3.5 text-blue-400 flex-shrink-0" />
+                <span className="text-xs text-blue-300">
+                  {isRtl ? `متاح مرة أخرى خلال ${cooldownText}` : `Available again in ${cooldownText}`}
+                </span>
+              </div>
+            )}
+
             {task.total && (
               <div className="mb-3">
                 <div className="flex justify-between text-xs text-muted-foreground mb-1">
                   <span>{isRtl ? 'التقدم' : 'Progress'}</span>
-                  <span>{progress}/{task.total}</span>
+                  <span>{task.userTask?.progress || 0}/{task.total}</span>
                 </div>
-                <Progress value={task.total > 0 ? (progress / task.total) * 100 : 0} className="h-1.5" />
+                <Progress value={task.total > 0 ? ((task.userTask?.progress || 0) / task.total) * 100 : 0} className="h-1.5" />
               </div>
             )}
 
             <div className="flex gap-2">
-              {claimed ? (
-                <Badge className="bg-emerald-500/20 text-emerald-400 border-0 gap-1">
-                  <CheckCircle2 className="h-3 w-3" />
-                  {isRtl ? 'تم الاستلام' : 'Claimed'}
+              {isCooldown ? (
+                <Badge className="bg-blue-500/20 text-blue-400 border-0 gap-1">
+                  <Clock className="h-3 w-3" />
+                  {isRtl ? `انتظر ${cooldownText}` : `Wait ${cooldownText}`}
                 </Badge>
-              ) : completed ? (
+              ) : isCompleted ? (
                 <Button
                   size="sm"
                   onClick={() => handleClaim(task.id)}
@@ -235,7 +250,7 @@ export function TasksPage() {
           {isRtl ? 'المهام اليومية' : 'Daily Tasks'}
         </h1>
         <p className="text-sm text-muted-foreground">
-          {isRtl ? 'أكمل المهام واربح عملات ونقاط إضافية' : 'Complete tasks and earn extra coins and points'}
+          {isRtl ? 'أكمل المهام واربح عملات ونقاط. المهام اليومية تتحدث كل 24 ساعة.' : 'Complete tasks and earn rewards. Daily tasks reset every 24 hours.'}
         </p>
       </motion.div>
 

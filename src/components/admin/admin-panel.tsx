@@ -749,13 +749,43 @@ function WalletsManager({ wallets, loading, onRefresh }: { wallets: Wallet[], lo
 function WalletForm({ wallet, saving, onSave, onCancel }: { wallet: Wallet | null, saving: boolean, onSave: (data: any) => void, onCancel: () => void }) {
   const { lang } = useAppStore()
   const isRtl = lang === 'ar'
+
+  // USDT with all available networks
+  const usdtNetworks = [
+    { value: 'TRC20', label: 'USDT - TRC20 (Tron)', currency: 'USDT-TRC20' },
+    { value: 'ERC20', label: 'USDT - ERC20 (Ethereum)', currency: 'USDT-ERC20' },
+    { value: 'BEP20', label: 'USDT - BEP20 (BNB Smart Chain)', currency: 'USDT-BEP20' },
+    { value: 'Solana', label: 'USDT - Solana', currency: 'USDT-Solana' },
+    { value: 'Polygon', label: 'USDT - Polygon', currency: 'USDT-Polygon' },
+    { value: 'Arbitrum One', label: 'USDT - Arbitrum One', currency: 'USDT-Arbitrum' },
+    { value: 'Optimism', label: 'USDT - Optimism', currency: 'USDT-Optimism' },
+    { value: 'Avalanche C-Chain', label: 'USDT - Avalanche C-Chain', currency: 'USDT-Avalanche' },
+  ]
+
+  // Find current network selection
+  const getCurrentNetwork = () => {
+    if (!wallet) return 'TRC20'
+    return wallet.network || 'TRC20'
+  }
+
   const [form, setForm] = useState({
-    currency: wallet?.currency || 'USDT-TRC20',
-    network: wallet?.network || 'TRC20',
+    network: getCurrentNetwork(),
     address: wallet?.address || '',
     label: wallet?.label || '',
     active: wallet?.active !== false,
   })
+
+  const selectedNetwork = usdtNetworks.find(n => n.network === form.network) || usdtNetworks[0]
+
+  const handleSave = () => {
+    onSave({
+      currency: selectedNetwork.currency,
+      network: form.network,
+      address: form.address,
+      label: form.label,
+      active: form.active,
+    })
+  }
 
   return (
     <div className="p-4 rounded-2xl glass border-[#00d4ff]/20 mb-4">
@@ -763,31 +793,55 @@ function WalletForm({ wallet, saving, onSave, onCancel }: { wallet: Wallet | nul
         <h4 className="font-bold">{wallet ? (isRtl ? 'تعديل عنوان' : 'Edit Address') : (isRtl ? 'عنوان جديد' : 'New Address')}</h4>
         <button onClick={onCancel}><X className="h-4 w-4" /></button>
       </div>
-      <div className="grid grid-cols-2 gap-3">
+
+      <div className="p-3 rounded-xl bg-[#26a17b]/10 border border-[#26a17b]/20 mb-3 flex items-center gap-2">
+        <span className="text-2xl">₮</span>
         <div>
-          <Label>{isRtl ? 'العملة' : 'Currency'}</Label>
-          <select value={form.currency} onChange={e => setForm({...form, currency: e.target.value, network: e.target.value.includes('TRC') ? 'TRC20' : e.target.value.includes('ERC') ? 'ERC20' : e.target.value})} className="w-full h-9 px-3 rounded-lg bg-white/5 border border-border">
-            <option value="BTC">Bitcoin (BTC)</option>
-            <option value="ETH">Ethereum (ETH)</option>
-            <option value="USDT-TRC20">USDT (TRC20)</option>
-            <option value="USDT-ERC20">USDT (ERC20)</option>
-            <option value="BNB">BNB</option>
-            <option value="LTC">Litecoin (LTC)</option>
-          </select>
+          <div className="text-sm font-bold text-[#26a17b]">USDT فقط</div>
+          <div className="text-xs text-muted-foreground">{isRtl ? 'جميع الشبكات المتاحة لـ USDT' : 'All available USDT networks'}</div>
         </div>
-        <div><Label>{isRtl ? 'الشبكة' : 'Network'}</Label><Input value={form.network} onChange={e => setForm({...form, network: e.target.value})} className="bg-white/5" /></div>
       </div>
-      <div className="mt-3">
+
+      <div className="mb-3">
+        <Label>{isRtl ? 'الشبكة' : 'Network'}</Label>
+        <select
+          value={form.network}
+          onChange={e => setForm({...form, network: e.target.value})}
+          className="w-full h-10 px-3 rounded-lg bg-white/5 border border-border"
+        >
+          {usdtNetworks.map(n => (
+            <option key={n.value} value={n.value}>{n.label}</option>
+          ))}
+        </select>
+      </div>
+
+      <div className="mb-3">
         <Label>{isRtl ? 'العنوان' : 'Address'}</Label>
-        <Input value={form.address} onChange={e => setForm({...form, address: e.target.value})} placeholder={isRtl ? 'أدخل العنوان الكامل' : 'Enter full address'} className="bg-white/5 font-mono" />
+        <Input
+          value={form.address}
+          onChange={e => setForm({...form, address: e.target.value})}
+          placeholder={isRtl ? `أدخل عنوان USDT ${form.network}` : `Enter USDT ${form.network} address`}
+          className="bg-white/5 font-mono"
+        />
       </div>
-      <div className="mt-3">
+
+      <div className="mb-3">
         <Label>{isRtl ? 'تسمية (اختياري)' : 'Label (optional)'}</Label>
-        <Input value={form.label} onChange={e => setForm({...form, label: e.target.value})} placeholder={isRtl ? 'مثلاً: المحفظة الرئيسية' : 'e.g. Main wallet'} className="bg-white/5" />
+        <Input
+          value={form.label}
+          onChange={e => setForm({...form, label: e.target.value})}
+          placeholder={isRtl ? 'مثلاً: المحفظة الرئيسية' : 'e.g. Main wallet'}
+          className="bg-white/5"
+        />
       </div>
-      <label className="flex items-center gap-2 text-sm mt-3"><Switch checked={form.active} onCheckedChange={v => setForm({...form, active: v})} />{isRtl ? 'نشط' : 'Active'}</label>
+
+      <label className="flex items-center gap-2 text-sm mt-3">
+        <Switch checked={form.active} onCheckedChange={v => setForm({...form, active: v})} />
+        {isRtl ? 'نشط' : 'Active'}
+      </label>
+
       <div className="flex gap-2 mt-4">
-        <Button onClick={() => onSave(form)} disabled={saving || !form.address} className="flex-1 bg-gradient-to-r from-[#00d4ff] to-[#9d4edd] text-white border-0">
+        <Button onClick={handleSave} disabled={saving || !form.address} className="flex-1 bg-gradient-to-r from-[#00d4ff] to-[#9d4edd] text-white border-0">
           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Save className="h-4 w-4 me-1" />{isRtl ? 'حفظ' : 'Save'}</>}
         </Button>
         <Button variant="outline" className="glass" onClick={onCancel}>{isRtl ? 'إلغاء' : 'Cancel'}</Button>
