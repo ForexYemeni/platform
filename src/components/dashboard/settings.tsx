@@ -171,33 +171,8 @@ export function SettingsPage() {
         {/* Appearance */}
         <TabsContent value="appearance" className="space-y-4">
           <Card className="p-6 glass border-white/5">
-            <h3 className="font-bold mb-4">{isRtl ? 'المظهر واللغة' : 'Appearance & Language'}</h3>
+            <h3 className="font-bold mb-4">{isRtl ? 'اللغة' : 'Language'}</h3>
             <div className="space-y-4">
-              {/* Theme */}
-              <div className="p-4 rounded-xl glass">
-                <Label className="mb-3 block">{isRtl ? 'الوضع' : 'Theme'}</Label>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    onClick={() => setTheme('dark')}
-                    className={`p-4 rounded-xl border-2 transition-all flex items-center gap-3 ${
-                      theme === 'dark' ? 'border-[#00d4ff] bg-[#00d4ff]/10' : 'border-white/5 glass'
-                    }`}
-                  >
-                    <Moon className="h-5 w-5" />
-                    <span className="font-medium text-sm">{isRtl ? 'داكن' : 'Dark'}</span>
-                  </button>
-                  <button
-                    onClick={() => setTheme('light')}
-                    className={`p-4 rounded-xl border-2 transition-all flex items-center gap-3 ${
-                      theme === 'light' ? 'border-[#00d4ff] bg-[#00d4ff]/10' : 'border-white/5 glass'
-                    }`}
-                  >
-                    <Sun className="h-5 w-5" />
-                    <span className="font-medium text-sm">{isRtl ? 'فاتح' : 'Light'}</span>
-                  </button>
-                </div>
-              </div>
-
               {/* Language */}
               <div className="p-4 rounded-xl glass">
                 <Label className="mb-3 block">{isRtl ? 'اللغة' : 'Language'}</Label>

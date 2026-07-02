@@ -2,8 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useTheme } from 'next-themes'
-import { Moon, Sun, Menu, X, Globe, ChevronDown } from 'lucide-react'
+import { Menu, X, Globe } from 'lucide-react'
 import { useAppStore } from '@/lib/store'
 import { marketData } from '@/lib/data'
 import { Logo } from './logo'
@@ -16,7 +15,6 @@ import {
 } from '@/components/ui/dropdown-menu'
 
 export function Navbar() {
-  const { theme, setTheme } = useTheme()
   const { lang, setLang, user, setView, setAuthStage, setMobileMenuOpen, mobileMenuOpen } = useAppStore()
   const [scrolled, setScrolled] = useState(false)
 
@@ -115,16 +113,6 @@ export function Navbar() {
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-
-              {/* Theme toggle */}
-              <Button
-                variant="ghost"
-                size="icon"
-                className="rounded-full"
-                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-              >
-                {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-              </Button>
 
               {user ? (
                 <Button

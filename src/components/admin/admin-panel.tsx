@@ -154,6 +154,46 @@ export function AdminPanel() {
     else toast.error(d.error)
   }
 
+  const [editingUser, setEditingUser] = useState<any>(null)
+  const [deleteUserModal, setDeleteUserModal] = useState<any>(null)
+  const [deleting, setDeleting] = useState(false)
+
+  const handleDeleteUser = async (userId: string) => {
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/admin/users?id=${userId}`, { method: 'DELETE' })
+      const d = await res.json()
+      if (d.success) {
+        toast.success(isRtl ? 'تم حذف المستخدم نهائياً' : 'User permanently deleted')
+        setDeleteUserModal(null)
+        fetchAllData()
+      } else toast.error(d.error)
+    } catch (e) { toast.error('Network error') }
+    finally { setDeleting(false) }
+  }
+
+  const handleChangeEmail = async (userId: string, newEmail: string) => {
+    const res = await fetch('/api/admin/users', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, action: 'changeEmail', value: newEmail })
+    })
+    const d = await res.json()
+    if (d.success) { toast.success(isRtl ? 'تم تغيير البريد' : 'Email changed'); fetchAllData() }
+    else toast.error(d.error)
+  }
+
+  const handleChangePassword = async (userId: string, newPassword: string) => {
+    const res = await fetch('/api/admin/users', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, action: 'changePassword', value: newPassword })
+    })
+    const d = await res.json()
+    if (d.success) { toast.success(isRtl ? 'تم تغيير كلمة المرور' : 'Password changed') }
+    else toast.error(d.error)
+  }
+
   return (
     <div className="space-y-6" dir={isRtl ? 'rtl' : 'ltr'}>
       {/* Header */}
@@ -293,11 +333,21 @@ export function AdminPanel() {
                         </Badge>
                       </td>
                       <td className="py-3">
-                        {!u.isAdmin && (
-                          <Button size="sm" variant="outline" className="glass" onClick={() => handleBlockUser(u.id, !u.isBlocked)}>
-                            {u.isBlocked ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" /> : <Ban className="h-3.5 w-3.5 text-red-400" />}
-                          </Button>
-                        )}
+                        <div className="flex items-center gap-1">
+                          {!u.isAdmin && (
+                            <>
+                              <Button size="sm" variant="outline" className="glass" onClick={() => setEditingUser(u)} title={isRtl ? 'تعديل' : 'Edit'}>
+                                <Edit className="h-3.5 w-3.5 text-[#00d4ff]" />
+                              </Button>
+                              <Button size="sm" variant="outline" className="glass" onClick={() => handleBlockUser(u.id, !u.isBlocked)} title={u.isBlocked ? (isRtl ? 'إلغاء الحظر' : 'Unblock') : (isRtl ? 'حظر' : 'Block')}>
+                                {u.isBlocked ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" /> : <Ban className="h-3.5 w-3.5 text-red-400" />}
+                              </Button>
+                              <Button size="sm" variant="outline" className="glass" onClick={() => setDeleteUserModal(u)} title={isRtl ? 'حذف' : 'Delete'}>
+                                <Trash2 className="h-3.5 w-3.5 text-red-400" />
+                              </Button>
+                            </>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -309,50 +359,14 @@ export function AdminPanel() {
 
         {/* === PAYMENTS === */}
         <TabsContent value="payments">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <Card className="p-5 glass border-white/5">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-bold flex items-center gap-2"><TrendingUp className="h-4 w-4 text-[#00d4ff]" />{isRtl ? 'إيداعات معلقة' : 'Pending Deposits'}</h3>
-                <Badge className="bg-amber-500/20 text-amber-400 border-0">{pendingDeposits.length}</Badge>
-              </div>
-              <div className="space-y-2">
-                {pendingDeposits.length === 0 ? (
-                  <div className="text-center py-6 text-sm text-muted-foreground">{isRtl ? 'لا توجد إيداعات معلقة' : 'No pending deposits'}</div>
-                ) : pendingDeposits.map((d: any) => (
-                  <div key={d.id} className="flex items-center gap-3 p-3 rounded-xl glass">
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium">{d.user?.name || d.user?.email || 'Unknown'}</div>
-                      <div className="text-xs text-muted-foreground">{d.amount} {d.currency} • {new Date(d.createdAt).toLocaleDateString()}</div>
-                    </div>
-                    <div className="text-sm font-bold">${d.amount}</div>
-                    <button onClick={() => handleApproveDeposit(d.id)} className="w-7 h-7 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 flex items-center justify-center"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" /></button>
-                    <button onClick={() => handleRejectDeposit(d.id)} className="w-7 h-7 rounded-lg bg-red-500/20 hover:bg-red-500/30 flex items-center justify-center"><XCircle className="h-3.5 w-3.5 text-red-400" /></button>
-                  </div>
-                ))}
-              </div>
-            </Card>
-            <Card className="p-5 glass border-white/5">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-bold flex items-center gap-2"><TrendingDown className="h-4 w-4 text-[#9d4edd]" />{isRtl ? 'سحوبات معلقة' : 'Pending Withdrawals'}</h3>
-                <Badge className="bg-amber-500/20 text-amber-400 border-0">{pendingWithdrawals.length}</Badge>
-              </div>
-              <div className="space-y-2">
-                {pendingWithdrawals.length === 0 ? (
-                  <div className="text-center py-6 text-sm text-muted-foreground">{isRtl ? 'لا توجد سحوبات معلقة' : 'No pending withdrawals'}</div>
-                ) : pendingWithdrawals.map((w: any) => (
-                  <div key={w.id} className="flex items-center gap-3 p-3 rounded-xl glass">
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium">{w.user?.name || w.user?.email || 'Unknown'}</div>
-                      <div className="text-xs text-muted-foreground">{w.amount} {w.currency} • {new Date(w.createdAt).toLocaleDateString()}</div>
-                    </div>
-                    <div className="text-sm font-bold">${w.amount}</div>
-                    <button onClick={() => handleApproveWithdrawal(w.id)} className="w-7 h-7 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 flex items-center justify-center"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" /></button>
-                    <button onClick={() => handleRejectWithdrawal(w.id)} className="w-7 h-7 rounded-lg bg-red-500/20 hover:bg-red-500/30 flex items-center justify-center"><XCircle className="h-3.5 w-3.5 text-red-400" /></button>
-                  </div>
-                ))}
-              </div>
-            </Card>
-          </div>
+          <PaymentsManager
+            pendingDeposits={pendingDeposits}
+            pendingWithdrawals={pendingWithdrawals}
+            onApproveDeposit={handleApproveDeposit}
+            onRejectDeposit={handleRejectDeposit}
+            onApproveWithdrawal={handleApproveWithdrawal}
+            onRejectWithdrawal={handleRejectWithdrawal}
+          />
         </TabsContent>
 
         {/* === PLANS === */}
@@ -385,6 +399,26 @@ export function AdminPanel() {
           <SettingsManager onRefresh={fetchAllData} />
         </TabsContent>
       </Tabs>
+
+      {/* Edit User Modal */}
+      {editingUser && (
+        <EditUserModal
+          user={editingUser}
+          onClose={() => setEditingUser(null)}
+          onChangeEmail={handleChangeEmail}
+          onChangePassword={handleChangePassword}
+        />
+      )}
+
+      {/* Delete User Confirmation Modal */}
+      {deleteUserModal && (
+        <DeleteUserModal
+          user={deleteUserModal}
+          deleting={deleting}
+          onConfirm={() => handleDeleteUser(deleteUserModal.id)}
+          onClose={() => setDeleteUserModal(null)}
+        />
+      )}
     </div>
   )
 }
@@ -1270,6 +1304,325 @@ function UserReferralDetail({ user, onClose }: { user: any, onClose: () => void 
           ) : (
             <p className="text-center text-muted-foreground py-8">{isRtl ? 'فشل تحميل البيانات' : 'Failed to load'}</p>
           )}
+        </div>
+      </motion.div>
+    </motion.div>
+  )
+}
+
+// ============================================
+// PAYMENTS MANAGER - Deposits & Withdrawals with full details
+// ============================================
+function PaymentsManager({ pendingDeposits, pendingWithdrawals, onApproveDeposit, onRejectDeposit, onApproveWithdrawal, onRejectWithdrawal }: {
+  pendingDeposits: any[],
+  pendingWithdrawals: any[],
+  onApproveDeposit: (id: string) => void,
+  onRejectDeposit: (id: string) => void,
+  onApproveWithdrawal: (id: string) => void,
+  onRejectWithdrawal: (id: string) => void,
+}) {
+  const { lang } = useAppStore()
+  const isRtl = lang === 'ar'
+  const [tab, setTab] = useState('pending')
+
+  return (
+    <div className="space-y-4">
+      {/* Pending Withdrawals - with FULL details */}
+      {pendingWithdrawals.length > 0 && (
+        <Card className="p-5 glass border-amber-500/20">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-bold flex items-center gap-2">
+              <TrendingDown className="h-4 w-4 text-amber-500" />
+              {isRtl ? 'سحوبات معلقة - عرض تفصيلي' : 'Pending Withdrawals - Full Details'}
+            </h3>
+            <Badge className="bg-amber-500/20 text-amber-600 border-0">{pendingWithdrawals.length}</Badge>
+          </div>
+          <div className="space-y-3">
+            {pendingWithdrawals.map((w: any) => (
+              <div key={w.id} className="p-4 rounded-xl glass border border-amber-500/10">
+                {/* User + Amount */}
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <div>
+                    <div className="font-medium text-sm">{w.user?.name || w.user?.email || 'Unknown'}</div>
+                    <div className="text-xs text-muted-foreground">{w.user?.email}</div>
+                  </div>
+                  <div className="text-lg font-black text-red-500">-${w.amount}</div>
+                </div>
+
+                {/* Details grid */}
+                <div className="grid grid-cols-2 gap-2 mb-3 text-xs">
+                  <div className="p-2 rounded-lg bg-muted/30">
+                    <span className="text-muted-foreground">{isRtl ? 'العملة' : 'Currency'}: </span>
+                    <span className="font-medium">{w.currency}</span>
+                  </div>
+                  <div className="p-2 rounded-lg bg-muted/30">
+                    <span className="text-muted-foreground">{isRtl ? 'الشبكة' : 'Network'}: </span>
+                    <span className="font-medium">{w.network}</span>
+                  </div>
+                  <div className="p-2 rounded-lg bg-muted/30">
+                    <span className="text-muted-foreground">{isRtl ? 'الرسوم' : 'Fee'}: </span>
+                    <span className="font-medium">{w.fee}</span>
+                  </div>
+                  <div className="p-2 rounded-lg bg-muted/30">
+                    <span className="text-muted-foreground">{isRtl ? 'التاريخ' : 'Date'}: </span>
+                    <span className="font-medium">{new Date(w.createdAt).toLocaleString()}</span>
+                  </div>
+                </div>
+
+                {/* Withdrawal address - CRITICAL for admin to send funds */}
+                <div className="p-3 rounded-lg bg-[#00d4ff]/5 border border-[#00d4ff]/20 mb-3">
+                  <div className="text-xs text-muted-foreground mb-1">{isRtl ? 'عنوان الاستلام (أرسل العملات هنا)' : 'Withdrawal Address (Send funds here)'}</div>
+                  <div className="font-mono text-sm break-all">{w.address}</div>
+                  <button
+                    onClick={() => { navigator.clipboard.writeText(w.address); toast.success(isRtl ? 'تم النسخ!' : 'Copied!') }}
+                    className="mt-2 text-xs text-[#00d4ff] hover:underline"
+                  >
+                    {isRtl ? 'نسخ العنوان' : 'Copy address'}
+                  </button>
+                </div>
+
+                {/* Action buttons */}
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={() => onApproveWithdrawal(w.id)} className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white border-0">
+                    <CheckCircle2 className="h-4 w-4 me-1" />{isRtl ? 'موافقة وإرسال' : 'Approve & Send'}
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => onRejectWithdrawal(w.id)} className="flex-1 glass text-red-500 border-red-500/30">
+                    <XCircle className="h-4 w-4 me-1" />{isRtl ? 'رفض' : 'Reject'}
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {/* Pending Deposits */}
+      {pendingDeposits.length > 0 && (
+        <Card className="p-5 glass border-amber-500/20">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-bold flex items-center gap-2">
+              <TrendingUp className="h-4 w-4 text-[#00d4ff]" />
+              {isRtl ? 'إيداعات معلقة' : 'Pending Deposits'}
+            </h3>
+            <Badge className="bg-amber-500/20 text-amber-600 border-0">{pendingDeposits.length}</Badge>
+          </div>
+          <div className="space-y-2">
+            {pendingDeposits.map((d: any) => (
+              <div key={d.id} className="p-3 rounded-xl glass border border-amber-500/10">
+                <div className="flex items-start justify-between gap-3 mb-2">
+                  <div>
+                    <div className="font-medium text-sm">{d.user?.name || d.user?.email || 'Unknown'}</div>
+                    <div className="text-xs text-muted-foreground">{d.user?.email}</div>
+                  </div>
+                  <div className="text-lg font-black text-emerald-500">+${d.amount}</div>
+                </div>
+                <div className="grid grid-cols-2 gap-2 mb-3 text-xs">
+                  <div className="p-2 rounded-lg bg-muted/30">
+                    <span className="text-muted-foreground">{isRtl ? 'العملة' : 'Currency'}: </span>
+                    <span className="font-medium">{d.currency}</span>
+                  </div>
+                  <div className="p-2 rounded-lg bg-muted/30">
+                    <span className="text-muted-foreground">{isRtl ? 'الشبكة' : 'Network'}: </span>
+                    <span className="font-medium">{d.network}</span>
+                  </div>
+                </div>
+                <div className="p-2 rounded-lg bg-muted/30 mb-3 text-xs">
+                  <span className="text-muted-foreground">{isRtl ? 'عنوان الإيداع' : 'Deposit Address'}: </span>
+                  <span className="font-mono break-all">{d.address}</span>
+                </div>
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={() => onApproveDeposit(d.id)} className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white border-0">
+                    <CheckCircle2 className="h-4 w-4 me-1" />{isRtl ? 'موافقة' : 'Approve'}
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => onRejectDeposit(d.id)} className="flex-1 glass text-red-500 border-red-500/30">
+                    <XCircle className="h-4 w-4 me-1" />{isRtl ? 'رفض' : 'Reject'}
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {/* Empty state */}
+      {pendingDeposits.length === 0 && pendingWithdrawals.length === 0 && (
+        <Card className="p-12 text-center glass border-white/5">
+          <CheckCircle2 className="h-12 w-12 text-emerald-500 mx-auto mb-3" />
+          <p className="text-sm font-medium text-muted-foreground">{isRtl ? 'لا توجد معاملات معلقة' : 'No pending transactions'}</p>
+          <p className="text-xs text-muted-foreground/70 mt-1">{isRtl ? 'كل الإيداعات والسحوبات تمت معالجتها' : 'All deposits and withdrawals are processed'}</p>
+        </Card>
+      )}
+    </div>
+  )
+}
+
+// ============================================
+// EDIT USER MODAL - Change email & password
+// ============================================
+function EditUserModal({ user, onClose, onChangeEmail, onChangePassword }: {
+  user: any,
+  onClose: () => void,
+  onChangeEmail: (userId: string, email: string) => void,
+  onChangePassword: (userId: string, password: string) => void,
+}) {
+  const { lang } = useAppStore()
+  const isRtl = lang === 'ar'
+  const [email, setEmail] = useState(user.email)
+  const [password, setPassword] = useState('')
+  const [savingEmail, setSavingEmail] = useState(false)
+  const [savingPassword, setSavingPassword] = useState(false)
+
+  const handleSaveEmail = async () => {
+    setSavingEmail(true)
+    await onChangeEmail(user.id, email)
+    setSavingEmail(false)
+  }
+
+  const handleSavePassword = async () => {
+    if (password.length < 6) {
+      toast.error(isRtl ? 'كلمة المرور يجب أن تكون 6 أحرف على الأقل' : 'Password must be at least 6 characters')
+      return
+    }
+    setSavingPassword(true)
+    await onChangePassword(user.id, password)
+    setPassword('')
+    setSavingPassword(false)
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      onClick={onClose}
+      className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+    >
+      <motion.div
+        initial={{ scale: 0.9, y: 20 }}
+        animate={{ scale: 1, y: 0 }}
+        onClick={e => e.stopPropagation()}
+        className="relative w-full max-w-md"
+      >
+        <div className="glass rounded-3xl border-white/10 p-6">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-xl font-bold">{isRtl ? 'تعديل المستخدم' : 'Edit User'}</h3>
+            <button onClick={onClose} className="w-9 h-9 rounded-full glass flex items-center justify-center"><X className="h-4 w-4" /></button>
+          </div>
+
+          <div className="space-y-4">
+            <div className="p-3 rounded-xl glass">
+              <div className="text-sm font-medium">{user.name}</div>
+              <div className="text-xs text-muted-foreground">{user.email}</div>
+              <div className="text-xs text-muted-foreground mt-1">{isRtl ? 'الرصيد' : 'Balance'}: ${user.balance?.toFixed(2)}</div>
+            </div>
+
+            {/* Change Email */}
+            <div>
+              <Label className="mb-2 block">{isRtl ? 'تغيير البريد الإلكتروني' : 'Change Email'}</Label>
+              <div className="flex gap-2">
+                <Input value={email} onChange={e => setEmail(e.target.value)} className="bg-white/5" type="email" />
+                <Button onClick={handleSaveEmail} disabled={savingEmail || email === user.email} className="bg-gradient-to-r from-[#00d4ff] to-[#9d4edd] text-white border-0">
+                  {savingEmail ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                </Button>
+              </div>
+            </div>
+
+            {/* Change Password */}
+            <div>
+              <Label className="mb-2 block">{isRtl ? 'تغيير كلمة المرور' : 'Change Password'}</Label>
+              <div className="flex gap-2">
+                <Input value={password} onChange={e => setPassword(e.target.value)} className="bg-white/5" type="password" placeholder={isRtl ? 'كلمة مرور جديدة' : 'New password'} />
+                <Button onClick={handleSavePassword} disabled={savingPassword || !password} className="bg-gradient-to-r from-[#00d4ff] to-[#9d4edd] text-white border-0">
+                  {savingPassword ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                </Button>
+              </div>
+              <p className="text-[10px] text-muted-foreground mt-1">{isRtl ? '6 أحرف على الأقل' : 'At least 6 characters'}</p>
+            </div>
+          </div>
+
+          <Button variant="outline" className="w-full glass mt-4" onClick={onClose}>{isRtl ? 'إغلاق' : 'Close'}</Button>
+        </div>
+      </motion.div>
+    </motion.div>
+  )
+}
+
+// ============================================
+// DELETE USER MODAL - Confirmation card
+// ============================================
+function DeleteUserModal({ user, deleting, onConfirm, onClose }: {
+  user: any,
+  deleting: boolean,
+  onConfirm: () => void,
+  onClose: () => void,
+}) {
+  const { lang } = useAppStore()
+  const isRtl = lang === 'ar'
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      onClick={() => !deleting && onClose()}
+      className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+    >
+      <motion.div
+        initial={{ scale: 0.9, y: 20 }}
+        animate={{ scale: 1, y: 0 }}
+        onClick={e => e.stopPropagation()}
+        className="relative w-full max-w-md"
+      >
+        <div className="glass rounded-3xl border-red-500/30 p-6">
+          {/* Warning icon */}
+          <div className="w-16 h-16 rounded-3xl bg-red-500/10 flex items-center justify-center mx-auto mb-4">
+            <Trash2 className="h-8 w-8 text-red-400" />
+          </div>
+
+          <h3 className="text-xl font-bold text-center mb-2">{isRtl ? 'حذف المستخدم نهائياً' : 'Delete User Permanently'}</h3>
+          <p className="text-sm text-muted-foreground text-center mb-6">
+            {isRtl ? 'سيتم حذف جميع بيانات المستخدم نهائياً. لا يمكن التراجع عن هذا الإجراء.' : 'All user data will be permanently deleted. This cannot be undone.'}
+          </p>
+
+          {/* User info */}
+          <div className="p-4 rounded-xl bg-red-500/5 border border-red-500/20 mb-6">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#00d4ff] to-[#9d4edd] flex items-center justify-center text-white font-bold">
+                {user.name?.charAt(0) || 'U'}
+              </div>
+              <div>
+                <div className="font-medium text-sm">{user.name}</div>
+                <div className="text-xs text-muted-foreground">{user.email}</div>
+              </div>
+            </div>
+            <div className="mt-2 pt-2 border-t border-red-500/10 text-xs text-red-300/70 space-y-1">
+              <div>{isRtl ? 'الرصيد' : 'Balance'}: ${user.balance?.toFixed(2)}</div>
+              <div>{isRtl ? 'إجمالي الأرباح' : 'Total Profit'}: ${user.totalProfit?.toFixed(2)}</div>
+              <div>{isRtl ? 'انضم في' : 'Joined'}: {new Date(user.createdAt).toLocaleDateString()}</div>
+            </div>
+          </div>
+
+          {/* Warning details */}
+          <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 mb-6">
+            <p className="text-xs text-amber-300/80">
+              {isRtl
+                ? '⚠️ سيتم حذف: الحساب، الإيداعات، السحوبات، المعاملات، الإشعارات، المهام، المكافآت، وسجلات الإحالات'
+                : '⚠️ Will delete: Account, deposits, withdrawals, transactions, notifications, tasks, rewards, and referral records'}
+            </p>
+          </div>
+
+          {/* Actions */}
+          <div className="flex gap-3">
+            <Button variant="outline" className="flex-1 glass" onClick={onClose} disabled={deleting}>
+              {isRtl ? 'إلغاء' : 'Cancel'}
+            </Button>
+            <Button onClick={onConfirm} disabled={deleting} className="flex-1 bg-gradient-to-r from-red-500 to-red-700 text-white border-0">
+              {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : (
+                <>
+                  <Trash2 className="h-4 w-4 me-2" />
+                  {isRtl ? 'حذف نهائي' : 'Delete Permanently'}
+                </>
+              )}
+            </Button>
+          </div>
         </div>
       </motion.div>
     </motion.div>

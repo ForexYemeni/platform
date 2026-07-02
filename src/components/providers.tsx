@@ -5,14 +5,15 @@ import { useEffect } from "react"
 
 export function Providers({ children }: { children: React.ReactNode }) {
   useEffect(() => {
-    // Apply dark mode by default
-    document.documentElement.classList.add('dark')
+    // Force LIGHT mode only - remove dark class
+    document.documentElement.classList.remove('dark')
   }, [])
 
   return (
     <ThemeProvider
       attribute="class"
-      defaultTheme="dark"
+      defaultTheme="light"
+      forcedTheme="light"
       enableSystem={false}
       disableTransitionOnChange={false}
     >
