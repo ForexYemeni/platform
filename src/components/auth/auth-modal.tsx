@@ -22,6 +22,17 @@ export function AuthModal() {
   const [countdown, setCountdown] = useState(45)
   const [loading, setLoading] = useState(false)
 
+  // Auto-fill referral code from URL parameter (?ref=CODE)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search)
+      const refCode = urlParams.get('ref')
+      if (refCode && refCode.length > 0) {
+        setReferralCode(refCode.toUpperCase())
+      }
+    }
+  }, [])
+
   useEffect(() => {
     if (authStage === 'otp' || authStage === 'twofa') {
       const interval = setInterval(() => {

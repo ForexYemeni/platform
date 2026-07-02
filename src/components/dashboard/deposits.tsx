@@ -54,28 +54,52 @@ export function DepositsPage() {
 
   // Get the real wallet address for selected crypto (from admin-managed wallets)
   const getRealAddress = (): string => {
-    // Build the wallet key to match admin WalletForm format: "USDT-{NETWORK}"
-    const walletKey = `USDT-${selectedCrypto.network}`
+    // realWallets is grouped by currency field from admin
+    // Admin stores: currency = "USDT-TRC20", network = "TRC20"
+    // selectedCrypto has: symbol = "USDT", network = "TRC20", id = "usdt-trc20"
 
-    // Search in all wallet groups
+    // Build possible keys to search
+    const possibleKeys = [
+      `USDT-${selectedCrypto.network}`,     // "USDT-TRC20"
+      selectedCrypto.id.toUpperCase(),       // "USDT-TRC20"
+      selectedCrypto.symbol,                 // "USDT"
+    ]
+
+    // Search in all groups
+    for (const key of Object.keys(realWallets)) {
+      // Direct key match
+      if (possibleKeys.includes(key)) {
+        const wallets = realWallets[key]
+        if (wallets && wallets.length > 0) {
+          // If key is just "USDT", filter by network
+          if (key === 'USDT') {
+            const match = wallets.find((w: any) =>
+              w.network === selectedCrypto.network ||
+              w.network?.toUpperCase() === selectedCrypto.network?.toUpperCase()
+            )
+            if (match) return match.address
+          } else {
+            return wallets[0].address
+          }
+        }
+      }
+    }
+
+    // Fallback: search ALL wallets for matching network
     for (const key of Object.keys(realWallets)) {
       const wallets = realWallets[key]
       if (!wallets || !Array.isArray(wallets)) continue
-
-      // Match by currency field (admin stores currency as "USDT-TRC20", etc.)
-      const match = wallets.find((w: any) => {
-        // Direct currency match
-        if (w.currency === walletKey) return true
-        // Match by network
-        if (w.currency === 'USDT' && w.network === selectedCrypto.network) return true
-        // Case-insensitive match
-        if (w.currency?.toUpperCase() === walletKey.toUpperCase()) return true
-        return false
-      })
-      if (match) return match.address
+      for (const w of wallets) {
+        // Match by network directly
+        if (w.network === selectedCrypto.network) return w.address
+        // Match by currency containing network name
+        if (w.currency && w.currency.includes(selectedCrypto.network)) return w.address
+        // Case insensitive network match
+        if (w.network?.toUpperCase() === selectedCrypto.network?.toUpperCase()) return w.address
+      }
     }
 
-    return '' // No address configured - admin must add one
+    return '' // No address configured
   }
 
   const hasRealAddress = (): boolean => {
@@ -98,8 +122,8 @@ export function DepositsPage() {
     }
     if (!hasRealAddress()) {
       toast.error(isRtl
-        ? `لا يوجد عنوان ${selectedCrypto.symbol} مُكوّن بعد. تواصل مع الدعم.`
-        : `No ${selectedCrypto.symbol} address configured. Contact support.`
+        ? `لا يوجد عنوان ${selectedCrypto.network} مُكوّن بعد لـ USDT. تواصل مع الدعم.`
+        : `No USDT (${selectedCrypto.network}) address configured. Contact support.`
       )
       return
     }

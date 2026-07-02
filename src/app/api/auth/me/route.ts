@@ -8,13 +8,14 @@ export async function GET() {
       return apiError('Not authenticated', 401)
     }
 
-    // Ensure activePlan is included
+    // Ensure activePlan is included and properly serialized
     const userWithPlan = user.activePlan ? user : await db!.user.findUnique({
       where: { id: user.id },
       include: { activePlan: true }
     })
 
     const userData = userWithPlan || user
+    const plan = userData.activePlan
 
     return apiSuccess({
       user: {
@@ -34,7 +35,21 @@ export async function GET() {
         referralCode: userData.referralCode,
         twoFactorEnabled: userData.twoFactorEnabled,
         emailVerified: userData.emailVerified,
-        activePlan: userData.activePlan || null,
+        activePlan: plan ? {
+          id: plan.id,
+          name: plan.name,
+          nameAr: plan.nameAr,
+          investment: plan.investment,
+          dailyProfit: plan.dailyProfit,
+          duration: plan.duration,
+          hashrate: plan.hashrate,
+          color: plan.color,
+          gradient: plan.gradient,
+          icon: plan.icon,
+          popular: plan.popular,
+          active: plan.active,
+          features: plan.features,
+        } : null,
         planActivatedAt: userData.planActivatedAt ? (userData.planActivatedAt instanceof Date ? userData.planActivatedAt.toISOString() : userData.planActivatedAt) : null,
         planExpiresAt: userData.planExpiresAt ? (userData.planExpiresAt instanceof Date ? userData.planExpiresAt.toISOString() : userData.planExpiresAt) : null,
         joinedAt: userData.createdAt?.toISOString?.() || userData.createdAt,

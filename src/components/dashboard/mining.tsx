@@ -86,7 +86,7 @@ export function MiningPage() {
   // Live profit counter - REAL cumulative calculation
   // Profit accrues continuously based on time elapsed since plan activation
   useEffect(() => {
-    if (!hasActivePlan || !user?.dailyProfit || !user?.planActivatedAt || !user?.activePlan) {
+    if (!hasActivePlan || !user?.planActivatedAt || !user?.activePlan) {
       setLiveProfit(0)
       return
     }
@@ -109,7 +109,7 @@ export function MiningPage() {
     // Update every second for smooth counter
     const interval = setInterval(calcProfit, 1000)
     return () => clearInterval(interval)
-  }, [hasActivePlan, user?.dailyProfit, user?.planActivatedAt, user?.activePlan, user?.totalProfit])
+  }, [hasActivePlan, user?.planActivatedAt, user?.activePlan, user?.totalProfit])
 
   const handleActivate = async (planId: string) => {
     if (!user) {
@@ -150,7 +150,7 @@ export function MiningPage() {
       })
       const data = await res.json()
       if (data.success) {
-        toast.success(isRtl ? `تمت إضافة $${data.data.amount} لرصيدك!` : `Added $${data.data.amount} to your balance!`)
+        toast.success(isRtl ? `✅ تمت إعادة استثمار $${data.data.amount.toFixed(4)}!` : `✅ Reinvested $${data.data.amount.toFixed(4)}!`)
         setShowReinvestModal(false)
         await fetchCurrentUser()
       } else {
@@ -302,7 +302,7 @@ export function MiningPage() {
                   className="flex-1 bg-gradient-to-r from-[#00d4ff] to-[#9d4edd] text-white border-0"
                 >
                   <RefreshCw className="h-4 w-4 me-2" />
-                  {isRtl ? 'سحب الأرباح المتراكمة' : 'Withdraw Accumulated Profits'}
+                  {isRtl ? 'إعادة استثمار الأرباح' : 'Reinvest Profits'}
                 </Button>
               </div>
             </div>
@@ -465,12 +465,12 @@ export function MiningPage() {
 
                   {/* Title */}
                   <h3 className="text-xl font-bold text-center mb-2">
-                    {isRtl ? 'سحب الأرباح المتراكمة' : 'Withdraw Accumulated Profits'}
+                    {isRtl ? 'إعادة استثمار الأرباح' : 'Reinvest Profits'}
                   </h3>
                   <p className="text-sm text-muted-foreground text-center mb-6">
                     {isRtl
-                      ? 'سيتم إضافة أرباحك المتراكمة إلى رصيدك القابل للسحب'
-                      : 'Your accumulated profits will be added to your withdrawable balance'}
+                      ? 'سيتم إضافة أرباحك المتراكمة إلى رصيدك'
+                      : 'Your accumulated profits will be added to your balance'}
                   </p>
 
                   {/* Amount display */}
@@ -537,7 +537,7 @@ export function MiningPage() {
                       ) : (
                         <>
                           <CheckCircle2 className="h-4 w-4 me-2" />
-                          {isRtl ? 'تأكيد السحب' : 'Confirm Withdrawal'}
+                          {isRtl ? 'تأكيد إعادة الاستثمار' : 'Confirm Reinvest'}
                         </>
                       )}
                     </Button>

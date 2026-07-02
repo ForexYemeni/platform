@@ -29,15 +29,31 @@ export async function POST(req: NextRequest) {
     const { planId, action } = body
 
     if (action === 'reinvest') {
-      // Reinvest daily profits
-      const profit = user.dailyProfit
-      if (profit <= 0) return apiError('No profits to reinvest', 400)
-      
+      // Calculate REAL accumulated profit based on time elapsed
+      if (!user.activePlanId || !user.planActivatedAt) {
+        return apiError('No active plan', 400)
+      }
+
+      const plan = await db.plan.findUnique({ where: { id: user.activePlanId } })
+      if (!plan) return apiError('Plan not found', 400)
+
+      const dailyProfitAmount = plan.investment * plan.dailyProfit / 100
+      const planActivatedAt = new Date(user.planActivatedAt).getTime()
+      const now = Date.now()
+      const elapsedDays = (now - planActivatedAt) / (1000 * 60 * 60 * 24)
+      const totalEarned = dailyProfitAmount * elapsedDays
+      const unclaimedProfit = Math.max(0, totalEarned - (user.totalProfit || 0))
+
+      if (unclaimedProfit <= 0.01) {
+        return apiError('No accumulated profits to reinvest yet', 400)
+      }
+
+      // Add accumulated profit to balance and totalProfit
       await db.user.update({
         where: { id: user.id },
         data: {
-          balance: { increment: profit },
-          totalProfit: { increment: profit },
+          balance: { increment: unclaimedProfit },
+          totalProfit: { increment: unclaimedProfit },
         }
       })
 
@@ -45,13 +61,22 @@ export async function POST(req: NextRequest) {
         data: {
           userId: user.id,
           type: 'PROFIT',
-          amount: profit,
+          amount: unclaimedProfit,
           currency: 'USDT',
-          description: 'Reinvested profits',
+          description: `Reinvested profits from ${plan.name} plan`,
         }
       })
 
-      return apiSuccess({ message: 'Profits reinvested', amount: profit })
+      await db.notification.create({
+        data: {
+          userId: user.id,
+          type: 'SUCCESS',
+          title: '✅ Profits Reinvested!',
+          message: `$${unclaimedProfit.toFixed(4)} has been added to your balance from mining profits.`,
+        }
+      })
+
+      return apiSuccess({ message: 'Profits reinvested', amount: unclaimedProfit })
     }
 
     // Activate a plan
