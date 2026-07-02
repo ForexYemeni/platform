@@ -1,0 +1,19 @@
+{
+  "name": "Crypto Mining Investment Platform 2026",
+  "short_name": "CryptoMine",
+  "description": "The world's most advanced crypto mining investment platform for 2026.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0a14",
+  "theme_color": "#0a0a14",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["finance", "business", "productivity"]
+}
