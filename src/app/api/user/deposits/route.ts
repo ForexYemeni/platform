@@ -32,17 +32,27 @@ export async function POST(req: NextRequest) {
       return apiError('Missing required fields', 400)
     }
 
-    // Generate a deposit address (mock - in production integrate real payment gateway)
-    const addresses: Record<string, string> = {
-      BTC: 'bc1q' + Math.random().toString(36).substring(2, 38),
-      ETH: '0x' + Math.random().toString(16).substring(2, 42),
-      'USDT-TRC20': 'T' + Math.random().toString(36).substring(2, 38),
-      'USDT-ERC20': '0x' + Math.random().toString(16).substring(2, 42),
-      BNB: 'bnb1' + Math.random().toString(36).substring(2, 38),
-      LTC: 'ltc1q' + Math.random().toString(36).substring(2, 38),
-    }
+    // Build the wallet key to search for (e.g., "USDT-TRC20")
+    const walletKey = `${currency}-${network}`
 
-    const address = addresses[currency] || addresses['BTC']
+    // Find a REAL wallet address from admin-managed wallets
+    let address = ''
+    const wallets = await db.walletAddress.findMany({
+      where: {
+        active: true,
+        OR: [
+          { currency: walletKey },
+          { currency: currency, network: network },
+        ]
+      }
+    })
+
+    if (wallets.length > 0) {
+      address = wallets[0].address
+    } else {
+      // No real address configured - return error
+      return apiError(`No deposit address configured for ${walletKey}. Please contact support.`, 400)
+    }
 
     const deposit = await db.deposit.create({
       data: {
@@ -60,7 +70,7 @@ export async function POST(req: NextRequest) {
         userId: user.id,
         type: 'INFO',
         title: 'Deposit Address Generated',
-        message: `Send ${amount} ${currency} to the generated address. Auto-confirms after 3 blocks.`,
+        message: `Send ${amount} ${currency} (${network}) to the address. Auto-confirms after 3 blocks.`,
       }
     })
 

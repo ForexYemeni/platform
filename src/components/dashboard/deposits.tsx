@@ -54,7 +54,15 @@ export function DepositsPage() {
 
   // Get the real wallet address for selected crypto (from admin-managed wallets)
   const getRealAddress = (): string => {
-    const wallets = realWallets[selectedCrypto.id] || realWallets[selectedCrypto.symbol]
+    // Try multiple key formats: "usdt-trc20", "USDT-TRC20", "USDT"+"TRC20"
+    const walletKey = selectedCrypto.id // e.g., "usdt-trc20"
+    const walletKeyUpper = walletKey.toUpperCase() // "USDT-TRC20"
+
+    const wallets = realWallets[walletKey] || realWallets[walletKeyUpper] ||
+                    (realWallets[selectedCrypto.symbol] || []).filter((w: any) =>
+                      w.network === selectedCrypto.network || w.network?.toUpperCase() === selectedCrypto.network?.toUpperCase()
+                    )
+
     if (wallets && wallets.length > 0) {
       return wallets[0].address
     }

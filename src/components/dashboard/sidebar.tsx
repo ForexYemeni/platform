@@ -327,10 +327,11 @@ export function DashboardTopbar() {
             </span>
           </div>
 
-          {/* Avatar */}
+          {/* Avatar - admin goes to admin panel, user goes to settings */}
           <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#00d4ff] to-[#9d4edd] flex items-center justify-center text-white font-bold text-sm cursor-pointer"
-               onClick={() => setView('settings')}>
-            {user?.name?.charAt(0) || 'A'}
+               onClick={() => setView(user?.isAdmin ? 'admin' : 'settings')}
+               title={user?.isAdmin ? (isRtl ? 'لوحة الإدارة' : 'Admin Panel') : (isRtl ? 'الإعدادات' : 'Settings')}>
+            {user?.isAdmin ? <Shield className="h-4 w-4" /> : (user?.name?.charAt(0) || 'U')}
           </div>
         </div>
       </div>
