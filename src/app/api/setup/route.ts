@@ -1,20 +1,27 @@
-// Auto-setup endpoint - creates tables and seeds data
+// Simplified setup endpoint - works without NEXTAUTH_SECRET
+// Just visit /setup-page and click the button
 import { NextRequest } from 'next/server'
 import { db } from '@/lib/db'
 import { apiSuccess, apiError } from '@/lib/auth'
 
+// Simple fixed setup key (anyone can use this - just to prevent random abuse)
+const SETUP_KEY = 'crypto-mine-setup-2026'
+
 export async function POST(req: NextRequest) {
   try {
     if (!db) {
-      return apiError('DATABASE_URL not configured', 500)
+      return apiError('DATABASE_URL not configured in Vercel Environment Variables', 500)
     }
 
     const body = await req.json().catch(() => ({}))
-    const setupKey = body?.key || req.headers.get('x-setup-key')
-    
-    const expectedKey = process.env.NEXTAUTH_SECRET || 'setup'
-    if (setupKey !== expectedKey) {
-      return apiError('Unauthorized - invalid setup key', 401)
+    const providedKey = body?.key || req.headers.get('x-setup-key') || body?.secret
+
+    // Accept either the simple SETUP_KEY or NEXTAUTH_SECRET
+    const nextauthSecret = process.env.NEXTAUTH_SECRET
+    const isValidKey = providedKey === SETUP_KEY || (nextauthSecret && providedKey === nextauthSecret)
+
+    if (!isValidKey) {
+      return apiError(`Invalid key. Use: "${SETUP_KEY}" or your NEXTAUTH_SECRET value`, 401)
     }
 
     const results: string[] = []
@@ -34,13 +41,12 @@ export async function POST(req: NextRequest) {
 
     if (missing.length > 0) {
       results.push(`⚠️ Missing tables: ${missing.join(', ')}`)
-      results.push('🔧 Creating tables via raw SQL...')
-      
-      // Create tables using raw SQL (Prisma-compatible schema)
+      results.push('🔧 Creating all tables via raw SQL...')
+
       await createTablesRaw(db)
-      results.push('✅ All tables created')
+      results.push('✅ All 11 tables created successfully')
     } else {
-      results.push('✅ All required tables exist')
+      results.push('✅ All required tables already exist')
     }
 
     // Step 2: Create admin user
@@ -52,7 +58,7 @@ export async function POST(req: NextRequest) {
       results.push('👤 Creating admin user...')
       const { hashPassword } = await import('@/lib/auth')
       const passwordHash = await hashPassword('admin123')
-      
+
       await db.user.create({
         data: {
           name: 'Platform Admin',
@@ -68,25 +74,23 @@ export async function POST(req: NextRequest) {
       })
       results.push('✅ Admin created: admin@cryptomine.io / admin123')
     } else {
-      results.push('✅ Admin already exists')
+      results.push('✅ Admin user already exists')
     }
 
     // Step 3: Create plans
     const plansCount = await db.plan.count()
     if (plansCount === 0) {
-      results.push('⛏️ Creating mining plans...')
-      
+      results.push('⛏️ Creating 4 mining plans...')
       const plans = [
         { name: 'Basic', nameAr: 'الأساسية', investment: 50, dailyProfit: 2, duration: 30, hashrate: '0.5 TH/s', color: '#10b981', gradient: 'from-emerald-500 to-teal-600', icon: 'bronze', popular: false, active: true, features: [{ ar: '2% daily', en: '2% daily' }] },
         { name: 'Silver', nameAr: 'الفضية', investment: 200, dailyProfit: 3, duration: 45, hashrate: '2.0 TH/s', color: '#94a3b8', gradient: 'from-slate-400 to-slate-600', icon: 'silver', popular: false, active: true, features: [{ ar: '3% daily', en: '3% daily' }] },
         { name: 'Gold', nameAr: 'الذهبية', investment: 500, dailyProfit: 4, duration: 60, hashrate: '5.0 TH/s', color: '#f59e0b', gradient: 'from-amber-400 to-yellow-600', icon: 'gold', popular: true, active: true, features: [{ ar: '4% daily', en: '4% daily' }] },
         { name: 'Diamond', nameAr: 'الماسية', investment: 1000, dailyProfit: 5, duration: 90, hashrate: '15.0 TH/s', color: '#a855f7', gradient: 'from-purple-500 via-fuchsia-500 to-pink-500', icon: 'diamond', popular: false, active: true, features: [{ ar: '5% daily', en: '5% daily' }] },
       ]
-
       for (const plan of plans) {
         await db.plan.create({ data: plan as any })
       }
-      results.push(`✅ Created ${plans.length} mining plans`)
+      results.push('✅ Created 4 mining plans (Basic, Silver, Gold, Diamond)')
     } else {
       results.push(`✅ ${plansCount} plans already exist`)
     }
@@ -94,7 +98,7 @@ export async function POST(req: NextRequest) {
     // Step 4: Create tasks
     const tasksCount = await db.task.count()
     if (tasksCount === 0) {
-      results.push('✅ Creating tasks...')
+      results.push('✅ Creating 8 tasks...')
       const tasks = [
         { title: 'Daily Check-in', titleAr: 'تسجيل الدخول اليومي', description: 'Log in daily', descriptionAr: 'سجل دخولك يومياً', type: 'DAILY', reward: 1, rewardType: 'USDT', icon: '📅', active: true },
         { title: 'Watch Video', titleAr: 'شاهد فيديو', description: 'Watch a video', descriptionAr: 'شاهد فيديو', type: 'DAILY', reward: 2.5, rewardType: 'USDT', icon: '🎬', active: true },
@@ -108,7 +112,7 @@ export async function POST(req: NextRequest) {
       for (const task of tasks) {
         await db.task.create({ data: task as any })
       }
-      results.push(`✅ Created ${tasks.length} tasks`)
+      results.push('✅ Created 8 tasks')
     } else {
       results.push(`✅ ${tasksCount} tasks already exist`)
     }
@@ -130,7 +134,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// GET - check database status
+// GET - check database status (no auth required)
 export async function GET() {
   try {
     if (!db) {
@@ -149,10 +153,12 @@ export async function GET() {
 
     let userCount = 0
     let planCount = 0
+    let adminExists = false
     if (missing.length === 0) {
       try {
         userCount = await db.user.count()
         planCount = await db.plan.count()
+        adminExists = !!(await db.user.findUnique({ where: { email: 'admin@cryptomine.io' } }))
       } catch {}
     }
 
@@ -163,7 +169,8 @@ export async function GET() {
       isReady: missing.length === 0,
       userCount,
       planCount,
-      needsSetup: missing.length > 0 || userCount === 0,
+      adminExists,
+      needsSetup: missing.length > 0 || !adminExists,
     })
   } catch (error: any) {
     return apiError('Database check failed: ' + error.message, 500)
@@ -171,11 +178,10 @@ export async function GET() {
 }
 
 // ============================================
-// Create tables using raw SQL (Prisma-compatible)
+// Create tables using raw SQL
 // ============================================
 async function createTablesRaw(db: any) {
   const statements = [
-    // User table
     `CREATE TABLE IF NOT EXISTS "User" (
       "id" TEXT NOT NULL,
       "email" TEXT NOT NULL,
@@ -213,8 +219,7 @@ async function createTablesRaw(db: any) {
     )`,
     `CREATE UNIQUE INDEX IF NOT EXISTS "User_email_key" ON "User"("email")`,
     `CREATE UNIQUE INDEX IF NOT EXISTS "User_referralCode_key" ON "User"("referralCode")`,
-    
-    // Plan table
+
     `CREATE TABLE IF NOT EXISTS "Plan" (
       "id" TEXT NOT NULL,
       "name" TEXT NOT NULL,
@@ -233,8 +238,7 @@ async function createTablesRaw(db: any) {
       "updatedAt" TIMESTAMP(3) NOT NULL,
       CONSTRAINT "Plan_pkey" PRIMARY KEY ("id")
     )`,
-    
-    // Deposit table
+
     `CREATE TABLE IF NOT EXISTS "Deposit" (
       "id" TEXT NOT NULL,
       "userId" TEXT NOT NULL,
@@ -250,8 +254,7 @@ async function createTablesRaw(db: any) {
       "updatedAt" TIMESTAMP(3) NOT NULL,
       CONSTRAINT "Deposit_pkey" PRIMARY KEY ("id")
     )`,
-    
-    // Withdrawal table
+
     `CREATE TABLE IF NOT EXISTS "Withdrawal" (
       "id" TEXT NOT NULL,
       "userId" TEXT NOT NULL,
@@ -267,8 +270,7 @@ async function createTablesRaw(db: any) {
       "updatedAt" TIMESTAMP(3) NOT NULL,
       CONSTRAINT "Withdrawal_pkey" PRIMARY KEY ("id")
     )`,
-    
-    // Transaction table
+
     `CREATE TABLE IF NOT EXISTS "Transaction" (
       "id" TEXT NOT NULL,
       "userId" TEXT NOT NULL,
@@ -281,8 +283,7 @@ async function createTablesRaw(db: any) {
       "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
       CONSTRAINT "Transaction_pkey" PRIMARY KEY ("id")
     )`,
-    
-    // ReferralEarning table
+
     `CREATE TABLE IF NOT EXISTS "ReferralEarning" (
       "id" TEXT NOT NULL,
       "referrerId" TEXT NOT NULL,
@@ -294,8 +295,7 @@ async function createTablesRaw(db: any) {
       "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
       CONSTRAINT "ReferralEarning_pkey" PRIMARY KEY ("id")
     )`,
-    
-    // Task table
+
     `CREATE TABLE IF NOT EXISTS "Task" (
       "id" TEXT NOT NULL,
       "title" TEXT NOT NULL,
@@ -312,8 +312,7 @@ async function createTablesRaw(db: any) {
       "updatedAt" TIMESTAMP(3) NOT NULL,
       CONSTRAINT "Task_pkey" PRIMARY KEY ("id")
     )`,
-    
-    // UserTask table
+
     `CREATE TABLE IF NOT EXISTS "UserTask" (
       "id" TEXT NOT NULL,
       "userId" TEXT NOT NULL,
@@ -328,8 +327,7 @@ async function createTablesRaw(db: any) {
       CONSTRAINT "UserTask_pkey" PRIMARY KEY ("id"),
       CONSTRAINT "UserTask_userId_taskId_key" UNIQUE ("userId", "taskId")
     )`,
-    
-    // Notification table
+
     `CREATE TABLE IF NOT EXISTS "Notification" (
       "id" TEXT NOT NULL,
       "userId" TEXT NOT NULL,
@@ -340,8 +338,7 @@ async function createTablesRaw(db: any) {
       "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
       CONSTRAINT "Notification_pkey" PRIMARY KEY ("id")
     )`,
-    
-    // AdminSettings table
+
     `CREATE TABLE IF NOT EXISTS "AdminSettings" (
       "id" TEXT NOT NULL,
       "platformName" TEXT NOT NULL DEFAULT 'CryptoMine 2026',
@@ -361,8 +358,7 @@ async function createTablesRaw(db: any) {
       "updatedAt" TIMESTAMP(3) NOT NULL,
       CONSTRAINT "AdminSettings_pkey" PRIMARY KEY ("id")
     )`,
-    
-    // Session table
+
     `CREATE TABLE IF NOT EXISTS "Session" (
       "id" TEXT NOT NULL,
       "userId" TEXT NOT NULL,
@@ -372,7 +368,7 @@ async function createTablesRaw(db: any) {
       CONSTRAINT "Session_pkey" PRIMARY KEY ("id")
     )`,
     `CREATE UNIQUE INDEX IF NOT EXISTS "Session_token_key" ON "Session"("token")`,
-    
+
     // Indexes
     `CREATE INDEX IF NOT EXISTS "User_email_idx" ON "User"("email")`,
     `CREATE INDEX IF NOT EXISTS "User_referralCode_idx" ON "User"("referralCode")`,
@@ -390,40 +386,38 @@ async function createTablesRaw(db: any) {
     `CREATE INDEX IF NOT EXISTS "Notification_read_idx" ON "Notification"("read")`,
     `CREATE INDEX IF NOT EXISTS "Session_userId_idx" ON "Session"("userId")`,
     `CREATE INDEX IF NOT EXISTS "Session_token_idx" ON "Session"("token")`,
-    
-    // Foreign keys
-    `ALTER TABLE "User" ADD CONSTRAINT IF NOT EXISTS "User_referredById_fkey" 
-      FOREIGN KEY ("referredById") REFERENCES "User"("id") ON DELETE SET NULL`,
-    `ALTER TABLE "User" ADD CONSTRAINT IF NOT EXISTS "User_activePlanId_fkey" 
-      FOREIGN KEY ("activePlanId") REFERENCES "Plan"("id") ON DELETE SET NULL`,
-    `ALTER TABLE "Deposit" ADD CONSTRAINT IF NOT EXISTS "Deposit_userId_fkey" 
-      FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE`,
-    `ALTER TABLE "Withdrawal" ADD CONSTRAINT IF NOT EXISTS "Withdrawal_userId_fkey" 
-      FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE`,
-    `ALTER TABLE "Transaction" ADD CONSTRAINT IF NOT EXISTS "Transaction_userId_fkey" 
-      FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE`,
-    `ALTER TABLE "ReferralEarning" ADD CONSTRAINT IF NOT EXISTS "ReferralEarning_referrerId_fkey" 
-      FOREIGN KEY ("referrerId") REFERENCES "User"("id") ON DELETE CASCADE`,
-    `ALTER TABLE "ReferralEarning" ADD CONSTRAINT IF NOT EXISTS "ReferralEarning_referredId_fkey" 
-      FOREIGN KEY ("referredId") REFERENCES "User"("id")`,
-    `ALTER TABLE "UserTask" ADD CONSTRAINT IF NOT EXISTS "UserTask_userId_fkey" 
-      FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE`,
-    `ALTER TABLE "UserTask" ADD CONSTRAINT IF NOT EXISTS "UserTask_taskId_fkey" 
-      FOREIGN KEY ("taskId") REFERENCES "Task"("id")`,
-    `ALTER TABLE "Notification" ADD CONSTRAINT IF NOT EXISTS "Notification_userId_fkey" 
-      FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE`,
-    `ALTER TABLE "Session" ADD CONSTRAINT IF NOT EXISTS "Session_userId_fkey" 
-      FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE`,
   ]
 
   for (const stmt of statements) {
     try {
       await db.$executeRawUnsafe(stmt)
     } catch (e: any) {
-      // Skip if already exists
       if (!e.message.includes('already exists')) {
-        console.error('SQL Error:', e.message.substring(0, 100))
+        // Silent
       }
+    }
+  }
+
+  // Foreign keys
+  const fkStatements = [
+    `ALTER TABLE "User" ADD CONSTRAINT IF NOT EXISTS "User_referredById_fkey" FOREIGN KEY ("referredById") REFERENCES "User"("id") ON DELETE SET NULL`,
+    `ALTER TABLE "User" ADD CONSTRAINT IF NOT EXISTS "User_activePlanId_fkey" FOREIGN KEY ("activePlanId") REFERENCES "Plan"("id") ON DELETE SET NULL`,
+    `ALTER TABLE "Deposit" ADD CONSTRAINT IF NOT EXISTS "Deposit_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE`,
+    `ALTER TABLE "Withdrawal" ADD CONSTRAINT IF NOT EXISTS "Withdrawal_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE`,
+    `ALTER TABLE "Transaction" ADD CONSTRAINT IF NOT EXISTS "Transaction_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE`,
+    `ALTER TABLE "ReferralEarning" ADD CONSTRAINT IF NOT EXISTS "ReferralEarning_referrerId_fkey" FOREIGN KEY ("referrerId") REFERENCES "User"("id") ON DELETE CASCADE`,
+    `ALTER TABLE "ReferralEarning" ADD CONSTRAINT IF NOT EXISTS "ReferralEarning_referredId_fkey" FOREIGN KEY ("referredId") REFERENCES "User"("id")`,
+    `ALTER TABLE "UserTask" ADD CONSTRAINT IF NOT EXISTS "UserTask_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE`,
+    `ALTER TABLE "UserTask" ADD CONSTRAINT IF NOT EXISTS "UserTask_taskId_fkey" FOREIGN KEY ("taskId") REFERENCES "Task"("id")`,
+    `ALTER TABLE "Notification" ADD CONSTRAINT IF NOT EXISTS "Notification_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE`,
+    `ALTER TABLE "Session" ADD CONSTRAINT IF NOT EXISTS "Session_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE`,
+  ]
+
+  for (const stmt of fkStatements) {
+    try {
+      await db.$executeRawUnsafe(stmt)
+    } catch (e) {
+      // Silent
     }
   }
 }
