@@ -197,6 +197,24 @@ export function DashboardSidebar({ isAdmin = false }: { isAdmin?: boolean }) {
                     )}
                   </button>
                 ))}
+
+                {/* Admin link in mobile sidebar */}
+                {user?.isAdmin && (
+                  <button
+                    onClick={() => { setView('admin'); setMobileMenuOpen(false) }}
+                    className={cn(
+                      "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all mt-2",
+                      view === 'admin'
+                        ? "bg-gradient-to-r from-[#ffd700]/20 to-[#ff8c00]/20 text-foreground border border-[#ffd700]/30"
+                        : "text-[#ffd700] hover:bg-accent/50"
+                    )}
+                  >
+                    <Shield className="h-5 w-5" />
+                    <span className="text-sm font-medium flex-1 text-start">
+                      {isRtl ? 'لوحة الإدارة' : 'Admin Panel'}
+                    </span>
+                  </button>
+                )}
               </nav>
 
               <div className="pt-4 border-t border-border">

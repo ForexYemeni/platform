@@ -104,7 +104,11 @@ export const useAppStore = create<AppState>()(
       user: null,
       authStage: 'closed',
       setAuthStage: (authStage) => set({ authStage }),
-      login: (user) => set({ user, authStage: 'closed', view: 'dashboard' }),
+      login: (user) => set({
+        user,
+        authStage: 'closed',
+        view: user.isAdmin ? 'admin' : 'dashboard',
+      }),
       logout: async () => {
         try {
           await fetch('/api/auth/logout', { method: 'POST' })

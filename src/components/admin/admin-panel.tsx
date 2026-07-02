@@ -1,7 +1,7 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Users, DollarSign, TrendingUp, TrendingDown, Search, MoreHorizontal,
   Shield, CheckCircle2, XCircle, Clock, Ban, Edit, Send, Plus,
@@ -21,34 +21,143 @@ import { Switch } from '@/components/ui/switch'
 import { toast } from 'sonner'
 
 export function AdminPanel() {
-  const { lang, setView } = useAppStore()
+  const { lang, setView, user } = useAppStore()
   const isRtl = lang === 'ar'
   const [search, setSearch] = useState('')
+  const [realStats, setRealStats] = useState<any>(null)
+  const [realUsers, setRealUsers] = useState<any[]>([])
+  const [pendingDeposits, setPendingDeposits] = useState<any[]>([])
+  const [pendingWithdrawals, setPendingWithdrawals] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
 
+  // Fetch real admin data
+  useEffect(() => {
+    fetchAdminData()
+  }, [])
+
+  const fetchAdminData = async () => {
+    setLoading(true)
+    try {
+      const [statsRes, usersRes, depositsRes, withdrawalsRes] = await Promise.all([
+        fetch('/api/admin/stats'),
+        fetch('/api/admin/users?limit=50'),
+        fetch('/api/admin/deposits'),
+        fetch('/api/admin/withdrawals'),
+      ])
+
+      if (statsRes.ok) {
+        const data = await statsRes.json()
+        if (data.success) setRealStats(data.data)
+      }
+      if (usersRes.ok) {
+        const data = await usersRes.json()
+        if (data.success) setRealUsers(data.data.users || [])
+      }
+      if (depositsRes.ok) {
+        const data = await depositsRes.json()
+        if (data.success) setPendingDeposits((data.data.deposits || []).filter((d: any) => d.status === 'PENDING'))
+      }
+      if (withdrawalsRes.ok) {
+        const data = await withdrawalsRes.json()
+        if (data.success) setPendingWithdrawals((data.data.withdrawals || []).filter((w: any) => w.status === 'PENDING'))
+      }
+    } catch (e) {
+      console.error('Admin data fetch error:', e)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleApproveDeposit = async (id: string) => {
+    try {
+      const res = await fetch('/api/admin/deposits', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ depositId: id, action: 'approve' })
+      })
+      const data = await res.json()
+      if (data.success) {
+        toast.success(isRtl ? 'تمت الموافقة على الإيداع' : 'Deposit approved')
+        fetchAdminData()
+      } else {
+        toast.error(data.error || 'Failed')
+      }
+    } catch (e) { toast.error('Network error') }
+  }
+
+  const handleRejectDeposit = async (id: string) => {
+    try {
+      const res = await fetch('/api/admin/deposits', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ depositId: id, action: 'reject' })
+      })
+      const data = await res.json()
+      if (data.success) {
+        toast.success(isRtl ? 'تم رفض الإيداع' : 'Deposit rejected')
+        fetchAdminData()
+      }
+    } catch (e) { toast.error('Network error') }
+  }
+
+  const handleApproveWithdrawal = async (id: string) => {
+    try {
+      const res = await fetch('/api/admin/withdrawals', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ withdrawalId: id, action: 'approve' })
+      })
+      const data = await res.json()
+      if (data.success) {
+        toast.success(isRtl ? 'تمت الموافقة على السحب' : 'Withdrawal approved')
+        fetchAdminData()
+      }
+    } catch (e) { toast.error('Network error') }
+  }
+
+  const handleRejectWithdrawal = async (id: string) => {
+    try {
+      const res = await fetch('/api/admin/withdrawals', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ withdrawalId: id, action: 'reject' })
+      })
+      const data = await res.json()
+      if (data.success) {
+        toast.success(isRtl ? 'تم رفض السحب' : 'Withdrawal rejected')
+        fetchAdminData()
+      }
+    } catch (e) { toast.error('Network error') }
+  }
+
+  const handleBlockUser = async (userId: string, block: boolean) => {
+    try {
+      const res = await fetch('/api/admin/users', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, action: block ? 'block' : 'unblock' })
+      })
+      const data = await res.json()
+      if (data.success) {
+        toast.success(block ? (isRtl ? 'تم حظر المستخدم' : 'User blocked') : (isRtl ? 'تم إلغاء الحظر' : 'User unblocked'))
+        fetchAdminData()
+      }
+    } catch (e) { toast.error('Network error') }
+  }
+
+  // Use real stats if available, otherwise show zeros
   const stats = [
-    { label: isRtl ? 'إجمالي المستخدمين' : 'Total Users', value: '247,832', change: '+8.2%', icon: Users, color: '#00d4ff' },
-    { label: isRtl ? 'المستخدمون النشطون' : 'Active Users', value: '184,219', change: '+12.5%', icon: Activity, color: '#10b981' },
-    { label: isRtl ? 'إجمالي الإيرادات' : 'Total Revenue', value: '$2.4M', change: '+24.1%', icon: DollarSign, color: '#ffd700' },
-    { label: isRtl ? 'إجمالي الإيداعات' : 'Total Deposits', value: '$8.7M', change: '+18.4%', icon: TrendingUp, color: '#9d4edd' },
-    { label: isRtl ? 'إجمالي السحوبات' : 'Total Withdrawals', value: '$3.2M', change: '+9.8%', icon: TrendingDown, color: '#ef4444' },
-    { label: isRtl ? 'مستخدمون جدد (اليوم)' : 'New Today', value: '+1,243', change: '+15.3%', icon: Crown, color: '#06b6d4' },
+    { label: isRtl ? 'إجمالي المستخدمين' : 'Total Users', value: realStats?.totalUsers?.toLocaleString() || '0', change: '+8.2%', icon: Users, color: '#00d4ff' },
+    { label: isRtl ? 'المستخدمون النشطون' : 'Active Users', value: realStats?.activeUsers?.toLocaleString() || '0', change: '+12.5%', icon: Activity, color: '#10b981' },
+    { label: isRtl ? 'إجمالي الإيرادات' : 'Total Revenue', value: `$${(realStats?.netRevenue || 0).toLocaleString()}`, change: '+24.1%', icon: DollarSign, color: '#ffd700' },
+    { label: isRtl ? 'إجمالي الإيداعات' : 'Total Deposits', value: `$${(realStats?.totalDepositsAmount || 0).toLocaleString()}`, change: '+18.4%', icon: TrendingUp, color: '#9d4edd' },
+    { label: isRtl ? 'إجمالي السحوبات' : 'Total Withdrawals', value: `$${(realStats?.totalWithdrawalsAmount || 0).toLocaleString()}`, change: '+9.8%', icon: TrendingDown, color: '#ef4444' },
+    { label: isRtl ? 'مستخدمون محظورون' : 'Blocked Users', value: realStats?.blockedUsers?.toLocaleString() || '0', change: '0%', icon: Crown, color: '#06b6d4' },
   ]
 
-  const pendingDeposits = [
-    { user: 'Ahmed Hassan', amount: 0.005, currency: 'BTC', value: '$339.25', time: '5 min ago', status: 'pending' },
-    { user: 'Sara Al-R', amount: 500, currency: 'USDT', value: '$500.00', time: '15 min ago', status: 'pending' },
-    { user: 'John Smith', amount: 1.5, currency: 'ETH', value: '$5,280.27', time: '30 min ago', status: 'pending' },
-  ]
-
-  const pendingWithdrawals = [
-    { user: 'Mei Lin', amount: 1200, currency: 'USDT', value: '$1,200.00', time: '2 min ago', status: 'pending' },
-    { user: 'David Kim', amount: 0.008, currency: 'BTC', value: '$542.80', time: '20 min ago', status: 'pending' },
-    { user: 'Fatima N.', amount: 250, currency: 'USDT', value: '$250.00', time: '45 min ago', status: 'pending' },
-  ]
-
-  const filteredUsers = mockAdminUsers.filter(u =>
-    u.name.toLowerCase().includes(search.toLowerCase()) ||
-    u.email.toLowerCase().includes(search.toLowerCase())
+  const filteredUsers = realUsers.filter((u: any) =>
+    u.name?.toLowerCase().includes(search.toLowerCase()) ||
+    u.email?.toLowerCase().includes(search.toLowerCase())
   )
 
   const pieData = [
@@ -233,38 +342,48 @@ export function AdminPanel() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredUsers.map((u) => (
+                  {filteredUsers.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="py-8 text-center text-muted-foreground">
+                        {loading ? (isRtl ? 'جارٍ التحميل...' : 'Loading...') : (isRtl ? 'لا توجد بيانات' : 'No users found')}
+                      </td>
+                    </tr>
+                  ) : filteredUsers.map((u: any) => (
                     <tr key={u.id} className="border-b border-border/50 hover:bg-accent/30 transition-colors">
                       <td className="py-3 ps-2">
                         <div className="flex items-center gap-2">
                           <Avatar className="w-9 h-9 bg-gradient-to-br from-[#00d4ff] to-[#9d4edd]">
                             <AvatarFallback className="text-white text-xs font-bold">
-                              {u.name.split(' ').map(n => n[0]).join('')}
+                              {(u.name || u.email || 'U').charAt(0).toUpperCase()}
                             </AvatarFallback>
                           </Avatar>
                           <div className="min-w-0">
-                            <div className="font-medium text-sm truncate">{u.name}</div>
+                            <div className="font-medium text-sm truncate">{u.name || 'Unknown'}</div>
                             <div className="text-xs text-muted-foreground truncate">{u.email}</div>
                           </div>
                         </div>
                       </td>
-                      <td className="py-3 font-semibold hidden md:table-cell">${u.balance.toFixed(2)}</td>
-                      <td className="py-3 hidden lg:table-cell text-muted-foreground">${u.totalInvested}</td>
+                      <td className="py-3 font-semibold hidden md:table-cell">${(u.balance || 0).toFixed(2)}</td>
+                      <td className="py-3 hidden lg:table-cell text-muted-foreground">${u.totalProfit?.toFixed(2) || '0.00'}</td>
                       <td className="py-3 hidden md:table-cell">
-                        <Badge variant="outline" className="border-white/10">{u.plan}</Badge>
+                        <Badge variant="outline" className="border-white/10">
+                          {u.activePlan?.name || u.vipLevel ? `VIP ${u.vipLevel}` : '-'}
+                        </Badge>
                       </td>
-                      <td className="py-3 hidden lg:table-cell text-muted-foreground text-xs">{u.lastActive}</td>
+                      <td className="py-3 hidden lg:table-cell text-muted-foreground text-xs">
+                        {u.lastActive ? new Date(u.lastActive).toLocaleDateString() : '-'}
+                      </td>
                       <td className="py-3">
                         <Badge
                           className={
-                            u.status === 'active' ? 'bg-emerald-500/20 text-emerald-400 border-0' :
-                            u.status === 'blocked' ? 'bg-red-500/20 text-red-400 border-0' :
-                            'bg-amber-500/20 text-amber-400 border-0'
+                            u.isBlocked ? 'bg-red-500/20 text-red-400 border-0' :
+                            u.isAdmin ? 'bg-[#ffd700]/20 text-[#ffd700] border-0' :
+                            'bg-emerald-500/20 text-emerald-400 border-0'
                           }
                         >
-                          {u.status === 'active' ? (isRtl ? 'نشط' : 'Active') :
-                           u.status === 'blocked' ? (isRtl ? 'محظور' : 'Blocked') :
-                           (isRtl ? 'معلق' : 'Pending')}
+                          {u.isBlocked ? (isRtl ? 'محظور' : 'Blocked') :
+                           u.isAdmin ? (isRtl ? 'مدير' : 'Admin') :
+                           (isRtl ? 'نشط' : 'Active')}
                         </Badge>
                       </td>
                       <td className="py-3">
@@ -277,11 +396,11 @@ export function AdminPanel() {
                             <Edit className="h-3.5 w-3.5 text-[#00d4ff]" />
                           </button>
                           <button
-                            onClick={() => toast.success(isRtl ? (u.status === 'blocked' ? 'تم إلغاء الحظر' : 'تم الحظر') : u.status === 'blocked' ? 'Unblocked' : 'Blocked')}
+                            onClick={() => handleBlockUser(u.id, !u.isBlocked)}
                             className="w-8 h-8 rounded-lg hover:bg-accent flex items-center justify-center"
-                            title={isRtl ? (u.status === 'blocked' ? 'إلغاء الحظر' : 'حظر') : (u.status === 'blocked' ? 'Unblock' : 'Block')}
+                            title={u.isBlocked ? (isRtl ? 'إلغاء الحظر' : 'Unblock') : (isRtl ? 'حظر' : 'Block')}
                           >
-                            {u.status === 'blocked' ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" /> : <Ban className="h-3.5 w-3.5 text-red-400" />}
+                            {u.isBlocked ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" /> : <Ban className="h-3.5 w-3.5 text-red-400" />}
                           </button>
                           <button className="w-8 h-8 rounded-lg hover:bg-accent flex items-center justify-center">
                             <MoreHorizontal className="h-3.5 w-3.5" />
@@ -309,24 +428,28 @@ export function AdminPanel() {
                 <Badge className="bg-amber-500/20 text-amber-400 border-0">{pendingDeposits.length}</Badge>
               </div>
               <div className="space-y-2">
-                {pendingDeposits.map((d, i) => (
-                  <div key={i} className="flex items-center gap-3 p-3 rounded-xl glass">
+                {pendingDeposits.length === 0 ? (
+                  <div className="text-center py-6 text-sm text-muted-foreground">
+                    {isRtl ? 'لا توجد إيداعات معلقة' : 'No pending deposits'}
+                  </div>
+                ) : pendingDeposits.map((d: any) => (
+                  <div key={d.id} className="flex items-center gap-3 p-3 rounded-xl glass">
                     <div className="w-9 h-9 rounded-full bg-[#00d4ff]/10 flex items-center justify-center">
                       <Clock className="h-4 w-4 text-[#00d4ff]" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium">{d.user}</div>
-                      <div className="text-xs text-muted-foreground">{d.amount} {d.currency} • {d.time}</div>
+                      <div className="text-sm font-medium">{d.user?.name || d.user?.email || 'Unknown'}</div>
+                      <div className="text-xs text-muted-foreground">{d.amount} {d.currency} • {new Date(d.createdAt).toLocaleDateString()}</div>
                     </div>
                     <div className="text-end">
-                      <div className="text-sm font-bold">{d.value}</div>
+                      <div className="text-sm font-bold">${d.amount}</div>
                     </div>
                     <div className="flex flex-col gap-1">
-                      <button onClick={() => toast.success(isRtl ? 'تم القبول' : 'Approved')}
+                      <button onClick={() => handleApproveDeposit(d.id)}
                         className="w-7 h-7 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 flex items-center justify-center">
                         <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
                       </button>
-                      <button onClick={() => toast.error(isRtl ? 'تم الرفض' : 'Rejected')}
+                      <button onClick={() => handleRejectDeposit(d.id)}
                         className="w-7 h-7 rounded-lg bg-red-500/20 hover:bg-red-500/30 flex items-center justify-center">
                         <XCircle className="h-3.5 w-3.5 text-red-400" />
                       </button>
@@ -346,24 +469,28 @@ export function AdminPanel() {
                 <Badge className="bg-amber-500/20 text-amber-400 border-0">{pendingWithdrawals.length}</Badge>
               </div>
               <div className="space-y-2">
-                {pendingWithdrawals.map((w, i) => (
-                  <div key={i} className="flex items-center gap-3 p-3 rounded-xl glass">
+                {pendingWithdrawals.length === 0 ? (
+                  <div className="text-center py-6 text-sm text-muted-foreground">
+                    {isRtl ? 'لا توجد سحوبات معلقة' : 'No pending withdrawals'}
+                  </div>
+                ) : pendingWithdrawals.map((w: any) => (
+                  <div key={w.id} className="flex items-center gap-3 p-3 rounded-xl glass">
                     <div className="w-9 h-9 rounded-full bg-[#9d4edd]/10 flex items-center justify-center">
                       <Clock className="h-4 w-4 text-[#9d4edd]" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium">{w.user}</div>
-                      <div className="text-xs text-muted-foreground">{w.amount} {w.currency} • {w.time}</div>
+                      <div className="text-sm font-medium">{w.user?.name || w.user?.email || 'Unknown'}</div>
+                      <div className="text-xs text-muted-foreground">{w.amount} {w.currency} • {new Date(w.createdAt).toLocaleDateString()}</div>
                     </div>
                     <div className="text-end">
-                      <div className="text-sm font-bold">{w.value}</div>
+                      <div className="text-sm font-bold">${w.amount}</div>
                     </div>
                     <div className="flex flex-col gap-1">
-                      <button onClick={() => toast.success(isRtl ? 'تم القبول' : 'Approved')}
+                      <button onClick={() => handleApproveWithdrawal(w.id)}
                         className="w-7 h-7 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 flex items-center justify-center">
                         <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
                       </button>
-                      <button onClick={() => toast.error(isRtl ? 'تم الرفض' : 'Rejected')}
+                      <button onClick={() => handleRejectWithdrawal(w.id)}
                         className="w-7 h-7 rounded-lg bg-red-500/20 hover:bg-red-500/30 flex items-center justify-center">
                         <XCircle className="h-3.5 w-3.5 text-red-400" />
                       </button>
