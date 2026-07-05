@@ -167,32 +167,28 @@ export async function POST(req: NextRequest) {
         }
       } catch {}
 
-      // Calculate mining start time based on admin's configured start hour
+      // Calculate mining start time based on admin's configured start hour (Makkah time)
       let miningStart: Date
       if (startHour >= 0) {
-        // Admin has configured a specific start hour
-        // Create today's date at that hour
-        miningStart = new Date()
-        miningStart.setHours(startHour, 0, 0, 0)
+        // Makkah is UTC+3. Calculate using milliseconds to avoid timezone issues.
+        const now = Date.now()
+        const makkahOffsetMs = 3 * 3600000  // +3 hours
+        const makkahNow = now + makkahOffsetMs
+        // Get the Makkah day (midnight in Makkah)
+        const makkahDayStart = Math.floor(makkahNow / 86400000) * 86400000
+        // Mining start = Makkah midnight + admin's start hour, converted back to UTC
+        const miningStartMs = makkahDayStart + startHour * 3600000 - makkahOffsetMs
+        miningStart = new Date(miningStartMs)
 
-        // If that time already passed today (e.g., it's 2 PM, start was 12 PM)
-        // → miningStart stays as today at startHour (in the past)
-        // Mining is ACTIVE from that past time
-
-        // If that time is in the future (e.g., it's 11 PM, start is 12 AM = hour 0)
-        // → miningStart is tomorrow at 00:00 (in the future)
-        // Mining is PENDING until that time
-        if (miningStart.getTime() <= now.getTime()) {
-          // Start time passed today → mining starts from that time (retroactive)
-          // But don't go back more than durationHours (cap it)
-          const maxStart = new Date(now.getTime() - durationHours * 60 * 60 * 1000)
-          if (miningStart < maxStart) {
-            miningStart = maxStart // Cap: don't start more than duration ago
-          }
+        // If start time is more than 23 hours in the past, it was yesterday's start
+        // → keep it (mining is active from that time, capped by duration check below)
+        // If start time is in the future → pending
+        // Cap: don't go back more than duration
+        const maxStart = new Date(now - durationHours * 3600000)
+        if (miningStart < maxStart) {
+          miningStart = maxStart
         }
-        // else: miningStart is in the future → pending
       } else {
-        // No start hour configured → start NOW
         miningStart = new Date()
       }
 
