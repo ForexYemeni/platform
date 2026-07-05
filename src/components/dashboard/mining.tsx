@@ -35,8 +35,8 @@ export function MiningPage() {
   const [activating, setActivating] = useState<string | null>(null)
   const [miningSettings, setMiningSettings] = useState<any>(null)
   const [miningData, setMiningData] = useState<any>(null)
-  const [liveProfit, setLiveProfit] = useState(0)
   const [timeLeft, setTimeLeft] = useState({ hours: 0, minutes: 0, seconds: 0, percent: 0 })
+  const [timeUntilStart, setTimeUntilStart] = useState({ hours: 0, minutes: 0, seconds: 0 })
   const [showWithdrawModal, setShowWithdrawModal] = useState(false)
   const [withdrawing, setWithdrawing] = useState(false)
 
@@ -63,35 +63,53 @@ export function MiningPage() {
     }
   }
 
-  // Live profit + countdown for active mining
+  // Live profit + countdown for active AND pending mining
   useEffect(() => {
-    if (!miningData?.isMiningActive || !user?.activePlan) {
+    if (!miningData || !user?.activePlan) {
       setLiveProfit(0)
       return
     }
 
     const plan = user.activePlan
     const dailyProfitAmount = plan.investment * plan.dailyProfit / 100
-    const startTime = miningData.lastActivation ? new Date(miningData.lastActivation).getTime() : Date.now()
+    const startTime = miningData.lastActivation ? new Date(miningData.lastActivation).getTime() : 0
+    const endTime = miningData.expiresAt ? new Date(miningData.expiresAt).getTime() : 0
+    const totalDuration = miningSettings?.miningDurationHours || 24
+    const totalDurationMs = totalDuration * 60 * 60 * 1000
 
-    const calcProfit = () => {
+    const calc = () => {
       const now = Date.now()
-      const elapsedMs = now - startTime
-      const elapsedDays = elapsedMs / (1000 * 60 * 60 * 24)
-      const profit = dailyProfitAmount * elapsedDays
-      setLiveProfit(profit)
 
-      // Calculate time remaining
-      if (miningData.expiresAt) {
-        const expires = new Date(miningData.expiresAt).getTime()
-        const remaining = expires - now
+      if (miningData.isPending && startTime > now) {
+        // PENDING state: countdown to when mining STARTS
+        const remainingToStart = startTime - now
+        if (remainingToStart > 0) {
+          const h = Math.floor(remainingToStart / (1000 * 60 * 60))
+          const m = Math.floor((remainingToStart % (1000 * 60 * 60)) / (60 * 1000))
+          const s = Math.floor((remainingToStart % (60 * 1000)) / 1000)
+          setTimeUntilStart({ hours: h, minutes: m, seconds: s })
+        } else {
+          // Mining just started - transition to active
+          setTimeUntilStart({ hours: 0, minutes: 0, seconds: 0 })
+        }
+        setLiveProfit(0) // No profit while pending
+        return
+      }
+
+      if (miningData.isMiningActive && endTime > now) {
+        // ACTIVE state: live profit + countdown to END
+        const elapsedMs = now - startTime
+        const elapsedDays = Math.max(0, elapsedMs) / (1000 * 60 * 60 * 24)
+        const profit = dailyProfitAmount * elapsedDays
+        setLiveProfit(profit)
+
+        const remaining = endTime - now
         if (remaining > 0) {
           const hours = Math.floor(remaining / (1000 * 60 * 60))
           const minutes = Math.floor((remaining % (1000 * 60 * 60)) / (60 * 1000))
           const seconds = Math.floor((remaining % (60 * 1000)) / 1000)
-          const total = miningSettings?.miningDurationHours || 24
-          const elapsed = total * 60 * 60 * 1000 - remaining
-          const percent = Math.min(100, (elapsed / (total * 60 * 60 * 1000)) * 100)
+          const elapsed = totalDurationMs - remaining
+          const percent = Math.min(100, Math.max(0, (elapsed / totalDurationMs) * 100))
           setTimeLeft({ hours, minutes, seconds, percent })
         } else {
           setTimeLeft({ hours: 0, minutes: 0, seconds: 0, percent: 100 })
@@ -99,8 +117,8 @@ export function MiningPage() {
       }
     }
 
-    calcProfit()
-    const interval = setInterval(calcProfit, 1000)
+    calc()
+    const interval = setInterval(calc, 1000)
     return () => clearInterval(interval)
   }, [miningData, user?.activePlan, miningSettings])
 
@@ -277,7 +295,40 @@ export function MiningPage() {
               </div>
 
               {/* Mining session status */}
-              {isMiningActive ? (
+              {miningData?.isPending ? (
+                /* PENDING STATE - Countdown to mining start */
+                <div className="space-y-4 mb-6">
+                  <div className="p-4 rounded-2xl glass border-amber-500/20 bg-amber-500/5">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs text-muted-foreground flex items-center gap-1.5">
+                        <Clock className="h-3 w-3 text-amber-500" />
+                        {isRtl ? 'الوقت المتبقي لبدء التعدين' : 'Time Until Mining Starts'}
+                      </span>
+                      <Badge className="bg-amber-500/20 text-amber-600 border-0 gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                        {isRtl ? 'مجدول' : 'Scheduled'}
+                      </Badge>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 mb-3">
+                      <div className="text-center">
+                        <div className="text-3xl font-black text-amber-500">{String(timeUntilStart.hours).padStart(2, '0')}</div>
+                        <div className="text-[10px] text-muted-foreground">{isRtl ? 'ساعة' : 'Hours'}</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-3xl font-black text-amber-500">{String(timeUntilStart.minutes).padStart(2, '0')}</div>
+                        <div className="text-[10px] text-muted-foreground">{isRtl ? 'دقيقة' : 'Minutes'}</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-3xl font-black text-amber-500">{String(timeUntilStart.seconds).padStart(2, '0')}</div>
+                        <div className="text-[10px] text-muted-foreground">{isRtl ? 'ثانية' : 'Seconds'}</div>
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground text-center">
+                      {isRtl ? 'التعدين سيبدأ تلقائياً عند حلول الوقت المحدد' : 'Mining will start automatically at the scheduled time'}
+                    </p>
+                  </div>
+                </div>
+              ) : isMiningActive ? (
                 <div className="space-y-4 mb-6">
                   {/* Live profit */}
                   <div className="p-4 rounded-2xl glass border-[#00d4ff]/20 bg-[#00d4ff]/5">

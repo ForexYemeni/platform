@@ -30,6 +30,7 @@ export async function GET() {
     // Calculate mining status for user (using Makkah time)
     const now = getMakkahNow()
     const isMiningActive = user.miningExpiresAt && new Date(user.miningExpiresAt) > now
+    const isPending = user.lastMiningActivation && new Date(user.lastMiningActivation) > now && user.miningExpiresAt && new Date(user.miningExpiresAt) > now
     const miningExpired = user.miningExpiresAt && new Date(user.miningExpiresAt) <= now && user.lastMiningActivation
 
     // If mining expired, calculate and move profits to accumulatedProfit
@@ -46,7 +47,8 @@ export async function GET() {
         minMiningBalance: settings.minMiningBalance,
       },
       mining: {
-        isMiningActive,
+        isMiningActive: isMiningActive && !isPending,
+        isPending,
         lastActivation: user.lastMiningActivation?.toISOString() || null,
         expiresAt: user.miningExpiresAt?.toISOString() || null,
         autoRenew: user.miningAutoRenew,
@@ -144,39 +146,61 @@ export async function POST(req: NextRequest) {
 
       // Get settings
       let durationHours = 24
-      let startHour = -1
+      let startHour = makkahNow.getHours()
       try {
         const s = await db.adminSettings.findUnique({ where: { id: 'singleton' } })
         if (s) {
           durationHours = s.miningDurationHours || 24
-          startHour = s.miningStartTime >= 0 && s.miningStartTime < 24 ? s.miningStartTime : -1
+          if (s.miningStartTime >= 0 && s.miningStartTime < 24) {
+            startHour = s.miningStartTime
+          }
         }
       } catch {}
 
-      // Calculate start and end times using Makkah timezone
-      const { start, end } = calculateMiningEndTime(startHour >= 0 ? startHour : makkahNow.getHours(), durationHours)
+      // Calculate mining start and end times based on ADMIN's configured start hour
+      // Start time = today at admin's configured hour
+      const miningStart = new Date(makkahNow)
+      miningStart.setHours(startHour, 0, 0, 0)
+
+      // If start time is in the FUTURE today (e.g., it's 11:50 PM, start is 12:00 AM = 0:00)
+      // then miningStart is actually tomorrow at 00:00
+      if (miningStart.getTime() <= makkahNow.getTime()) {
+        // Start time already passed today (e.g., it's 12:30 AM, start was 12:00 AM)
+        // Mining started at 12:00 AM, end = 12:00 AM + 24h
+        // Keep miningStart as today's start hour
+      }
+      // Note: if start time is in the future, miningStart stays as today's future time
+
+      // End time = start + duration
+      const miningEnd = new Date(miningStart.getTime() + durationHours * 60 * 60 * 1000)
 
       await db.user.update({
         where: { id: user.id },
         data: {
-          lastMiningActivation: start,
-          miningExpiresAt: end,
+          lastMiningActivation: miningStart,
+          miningExpiresAt: miningEnd,
         }
       })
+
+      // Determine if mining is pending or active
+      const isPending = miningStart.getTime() > makkahNow.getTime()
 
       await db.notification.create({
         data: {
           userId: user.id,
           type: 'SUCCESS',
-          title: '⛏️ Mining Activated!',
-          message: `Daily mining started. Earn profits for ${durationHours} hours. Return tomorrow to activate again!`,
+          title: isPending ? '⏳ Mining Scheduled!' : '⛏️ Mining Activated!',
+          message: isPending
+            ? `Mining will start at ${miningStart.toLocaleString('en-US', { timeZone: 'Asia/Riyadh', hour: 'numeric', minute: '2-digit', hour12: true })} Makkah time.`
+            : `Mining is now active! Earn profits for ${durationHours} hours.`,
         }
       })
 
       return apiSuccess({
-        message: 'Mining activated',
-        expiresAt: end.toISOString(),
-        startTime: start.toISOString(),
+        message: isPending ? 'Mining scheduled' : 'Mining activated',
+        startTime: miningStart.toISOString(),
+        endTime: miningEnd.toISOString(),
+        isPending,
       })
     }
 
