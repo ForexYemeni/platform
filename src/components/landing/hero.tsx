@@ -13,16 +13,19 @@ export function Hero() {
   const y = useTransform(scrollYProgress, [0, 1], [0, 200])
   const opacity = useTransform(scrollYProgress, [0, 0.8], [1, 0])
 
-  const [liveUsers, setLiveUsers] = useState(247832)
-  const [liveProfit, setLiveProfit] = useState(4827500)
+  const [content, setContent] = useState<any>(null)
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setLiveUsers((u) => u + Math.floor(Math.random() * 5) - 1)
-      setLiveProfit((p) => p + Math.floor(Math.random() * 1500))
-    }, 2000)
-    return () => clearInterval(interval)
+    fetch('/api/landing')
+      .then(r => r.json())
+      .then(d => {
+        if (d.success && d.data.content) setContent(d.data.content)
+      })
+      .catch(() => {})
   }, [])
+
+  // Get text based on language
+  const getText = (en: string, ar: string) => lang === 'ar' ? ar : en
 
   return (
     <section
@@ -75,7 +78,7 @@ export function Hero() {
           >
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
             <span className="text-xs font-medium text-foreground/80">
-              {lang === 'ar' ? 'منصة الاستثمار رقم 1 لعام 2026' : 'The #1 Investment Platform of 2026'}
+              {content ? getText(content.heroBadge, content.heroBadgeAr) : (lang === 'ar' ? 'منصة الاستثمار رقم 1 لعام 2026' : 'The #1 Investment Platform of 2026')}
             </span>
             <span className="text-[#ffd700] text-xs">⭐ 4.9/5</span>
           </motion.div>
@@ -88,10 +91,10 @@ export function Hero() {
             className="text-5xl md:text-7xl lg:text-8xl font-black tracking-tight leading-[1.05] mb-6"
           >
             <span className="block text-foreground">
-              {lang === 'ar' ? 'مستقبل التعدين' : 'The Future of'}
+              {content ? getText(content.heroTitle1, content.heroTitle1Ar) : (lang === 'ar' ? 'مستقبل التعدين' : 'The Future of')}
             </span>
             <span className="block text-gradient-electric animate-gradient">
-              {lang === 'ar' ? 'العملات الرقمية' : 'Crypto Mining'}
+              {content ? getText(content.heroTitle2, content.heroTitle2Ar) : (lang === 'ar' ? 'العملات الرقمية' : 'Crypto Mining')}
             </span>
           </motion.h1>
 
@@ -102,9 +105,11 @@ export function Hero() {
             transition={{ duration: 0.7, delay: 0.2 }}
             className="text-base md:text-lg text-muted-foreground max-w-2xl mx-auto mb-8 leading-relaxed"
           >
-            {lang === 'ar'
-              ? 'منصة استثمار فاخرة تجمع بين تقنيات التعدين المتقدمة وأمان مؤسسي. ابدأ رحلتك نحو الحرية المالية اليوم مع عوائد يومية تصل إلى 5%.'
-              : 'A luxury investment platform combining advanced mining technology with institutional-grade security. Start your journey to financial freedom today with daily returns up to 5%.'}
+            {content
+              ? getText(content.heroSubtitle, content.heroSubtitleAr)
+              : (lang === 'ar'
+                ? 'منصة استثمار فاخرة تجمع بين تقنيات التعدين المتقدمة وأمان مؤسسي. ابدأ رحلتك نحو الحرية المالية اليوم مع عوائد يومية تصل إلى 5%.'
+                : 'A luxury investment platform combining advanced mining technology with institutional-grade security. Start your journey to financial freedom today with daily returns up to 5%.')}
           </motion.p>
 
           {/* CTAs */}
@@ -157,7 +162,7 @@ export function Hero() {
             </div>
           </motion.div>
 
-          {/* Live stats bar */}
+          {/* Stats bar - from admin settings */}
           <motion.div
             initial={{ y: 30, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
@@ -165,10 +170,10 @@ export function Hero() {
             className="mt-12 grid grid-cols-2 md:grid-cols-4 gap-3 max-w-3xl mx-auto"
           >
             {[
-              { label: lang === 'ar' ? 'مستثمر نشط' : 'Active Investors', value: liveUsers.toLocaleString(), color: 'text-[#00d4ff]' },
-              { label: lang === 'ar' ? 'مدفوع للأعضاء' : 'Paid to Members', value: `$${(liveProfit / 1000000).toFixed(2)}M`, color: 'text-[#ffd700]' },
-              { label: lang === 'ar' ? 'دولة' : 'Countries', value: '120+', color: 'text-[#9d4edd]' },
-              { label: lang === 'ar' ? 'وقت التشغيل' : 'Uptime', value: '99.98%', color: 'text-emerald-400' },
+              { label: lang === 'ar' ? 'مستثمر نشط' : 'Active Investors', value: content?.statInvestors || '250,000+', color: 'text-[#00d4ff]' },
+              { label: lang === 'ar' ? 'حجم التداول' : 'Trading Volume', value: content?.statVolume || '$48M+', color: 'text-[#ffd700]' },
+              { label: lang === 'ar' ? 'دولة' : 'Countries', value: content?.statCountries || '120+', color: 'text-[#9d4edd]' },
+              { label: lang === 'ar' ? 'وقت التشغيل' : 'Uptime', value: content?.statUptime || '99.98%', color: 'text-emerald-400' },
             ].map((stat, i) => (
               <div key={i} className="glass rounded-2xl p-4 text-center">
                 <div className={`text-2xl font-black ${stat.color}`}>{stat.value}</div>

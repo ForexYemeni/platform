@@ -6,7 +6,7 @@ import {
   Users, DollarSign, TrendingUp, TrendingDown, Search, MoreHorizontal,
   Shield, CheckCircle2, XCircle, Clock, Ban, Edit, Send, Plus,
   Cpu, CreditCard, CheckSquare, Settings, Activity, Crown, AlertCircle, Save,
-  Trash2, Wallet, X, Loader2, Gift, Power, Zap
+  Trash2, Wallet, X, Loader2, Gift, Power, Zap, Globe
 } from 'lucide-react'
 import { AreaChart, Area, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid, PieChart, Pie, Cell } from 'recharts'
 import { useAppStore } from '@/lib/store'
@@ -291,6 +291,7 @@ export function AdminPanel() {
           <TabsTrigger value="rewards"><Gift className="h-4 w-4 me-2" />{isRtl ? 'المكافآت' : 'Rewards'}</TabsTrigger>
           <TabsTrigger value="referrals"><Users className="h-4 w-4 me-2" />{isRtl ? 'الإحالات' : 'Referrals'}</TabsTrigger>
           <TabsTrigger value="mining"><Cpu className="h-4 w-4 me-2" />{isRtl ? 'التعدين' : 'Mining'}</TabsTrigger>
+          <TabsTrigger value="landing"><Globe className="h-4 w-4 me-2" />{isRtl ? 'الصفحة الرئيسية' : 'Landing'}</TabsTrigger>
           <TabsTrigger value="settings"><Settings className="h-4 w-4 me-2" />{isRtl ? 'الإعدادات' : 'Settings'}</TabsTrigger>
         </TabsList>
 
@@ -398,6 +399,11 @@ export function AdminPanel() {
         {/* === MINING CONTROL === */}
         <TabsContent value="mining">
           <MiningControlManager onRefresh={fetchAllData} />
+        </TabsContent>
+
+        {/* === LANDING PAGE === */}
+        <TabsContent value="landing">
+          <LandingContentManager onRefresh={fetchAllData} />
         </TabsContent>
 
         {/* === SETTINGS === */}
@@ -1800,6 +1806,167 @@ function DeleteUserModal({ user, deleting, onConfirm, onClose }: {
         </div>
       </motion.div>
     </motion.div>
+  )
+}
+
+// ============================================
+// LANDING CONTENT MANAGER - Edit homepage text
+// ============================================
+function LandingContentManager({ onRefresh }: { onRefresh: () => void }) {
+  const { lang } = useAppStore()
+  const isRtl = lang === 'ar'
+  const [settings, setSettings] = useState<any>(null)
+  const [saving, setSaving] = useState(false)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetch('/api/admin/settings').then(r => r.json()).then(d => {
+      if (d.success) setSettings(d.data.settings)
+      setLoading(false)
+    })
+  }, [])
+
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      const fields = [
+        'heroBadge', 'heroTitle1', 'heroTitle2', 'heroSubtitle',
+        'heroBadgeAr', 'heroTitle1Ar', 'heroTitle2Ar', 'heroSubtitleAr',
+        'ctaTitle', 'ctaTitleAr', 'ctaSubtitle', 'ctaSubtitleAr',
+        'statInvestors', 'statVolume', 'statCountries', 'statUptime',
+      ]
+      const data: any = {}
+      for (const f of fields) data[f] = settings[f]
+
+      const res = await fetch('/api/admin/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      })
+      const d = await res.json()
+      if (d.success) {
+        toast.success(isRtl ? 'تم حفظ محتوى الصفحة الرئيسية' : 'Landing content saved')
+        onRefresh()
+      } else toast.error(d.error)
+    } catch (e) { toast.error('Network error') }
+    finally { setSaving(false) }
+  }
+
+  if (loading || !settings) return <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-[#00d4ff]" /></div>
+
+  return (
+    <div className="space-y-4">
+      {/* Hero Section */}
+      <Card className="p-5 glass border-border">
+        <h3 className="font-bold mb-4 flex items-center gap-2">
+          <Globe className="h-5 w-5 text-[#00d4ff]" />
+          {isRtl ? 'محتوى القسم الرئيسي (Hero)' : 'Hero Section Content'}
+        </h3>
+
+        <div className="space-y-4">
+          {/* Badge */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="mb-1 block text-xs">{isRtl ? 'الشارة (EN)' : 'Badge (EN)'}</Label>
+              <Input value={settings.heroBadge || ''} onChange={e => setSettings({ ...settings, heroBadge: e.target.value })} className="bg-background" />
+            </div>
+            <div>
+              <Label className="mb-1 block text-xs">{isRtl ? 'الشارة (AR)' : 'Badge (AR)'}</Label>
+              <Input value={settings.heroBadgeAr || ''} onChange={e => setSettings({ ...settings, heroBadgeAr: e.target.value })} className="bg-background" dir="rtl" />
+            </div>
+          </div>
+
+          {/* Title */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="mb-1 block text-xs">{isRtl ? 'العنوان 1 (EN)' : 'Title 1 (EN)'}</Label>
+              <Input value={settings.heroTitle1 || ''} onChange={e => setSettings({ ...settings, heroTitle1: e.target.value })} className="bg-background" />
+            </div>
+            <div>
+              <Label className="mb-1 block text-xs">{isRtl ? 'العنوان 1 (AR)' : 'Title 1 (AR)'}</Label>
+              <Input value={settings.heroTitle1Ar || ''} onChange={e => setSettings({ ...settings, heroTitle1Ar: e.target.value })} className="bg-background" dir="rtl" />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="mb-1 block text-xs">{isRtl ? 'العنوان 2 (EN)' : 'Title 2 (EN)'}</Label>
+              <Input value={settings.heroTitle2 || ''} onChange={e => setSettings({ ...settings, heroTitle2: e.target.value })} className="bg-background" />
+            </div>
+            <div>
+              <Label className="mb-1 block text-xs">{isRtl ? 'العنوان 2 (AR)' : 'Title 2 (AR)'}</Label>
+              <Input value={settings.heroTitle2Ar || ''} onChange={e => setSettings({ ...settings, heroTitle2Ar: e.target.value })} className="bg-background" dir="rtl" />
+            </div>
+          </div>
+
+          {/* Subtitle */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="mb-1 block text-xs">{isRtl ? 'الوصف (EN)' : 'Subtitle (EN)'}</Label>
+              <textarea value={settings.heroSubtitle || ''} onChange={e => setSettings({ ...settings, heroSubtitle: e.target.value })} className="w-full min-h-[80px] p-2 rounded-lg bg-background border border-border text-sm" />
+            </div>
+            <div>
+              <Label className="mb-1 block text-xs">{isRtl ? 'الوصف (AR)' : 'Subtitle (AR)'}</Label>
+              <textarea value={settings.heroSubtitleAr || ''} onChange={e => setSettings({ ...settings, heroSubtitleAr: e.target.value })} className="w-full min-h-[80px] p-2 rounded-lg bg-background border border-border text-sm" dir="rtl" />
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      {/* Stats */}
+      <Card className="p-5 glass border-border">
+        <h3 className="font-bold mb-4">{isRtl ? 'الإحصائيات' : 'Statistics'}</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div>
+            <Label className="mb-1 block text-xs">{isRtl ? 'المستثمرون' : 'Investors'}</Label>
+            <Input value={settings.statInvestors || ''} onChange={e => setSettings({ ...settings, statInvestors: e.target.value })} className="bg-background" />
+          </div>
+          <div>
+            <Label className="mb-1 block text-xs">{isRtl ? 'حجم التداول' : 'Volume'}</Label>
+            <Input value={settings.statVolume || ''} onChange={e => setSettings({ ...settings, statVolume: e.target.value })} className="bg-background" />
+          </div>
+          <div>
+            <Label className="mb-1 block text-xs">{isRtl ? 'الدول' : 'Countries'}</Label>
+            <Input value={settings.statCountries || ''} onChange={e => setSettings({ ...settings, statCountries: e.target.value })} className="bg-background" />
+          </div>
+          <div>
+            <Label className="mb-1 block text-xs">{isRtl ? 'وقت التشغيل' : 'Uptime'}</Label>
+            <Input value={settings.statUptime || ''} onChange={e => setSettings({ ...settings, statUptime: e.target.value })} className="bg-background" />
+          </div>
+        </div>
+      </Card>
+
+      {/* CTA Section */}
+      <Card className="p-5 glass border-border">
+        <h3 className="font-bold mb-4">{isRtl ? 'قسم الدعوة (CTA)' : 'CTA Section'}</h3>
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="mb-1 block text-xs">{isRtl ? 'العنوان (EN)' : 'Title (EN)'}</Label>
+              <Input value={settings.ctaTitle || ''} onChange={e => setSettings({ ...settings, ctaTitle: e.target.value })} className="bg-background" />
+            </div>
+            <div>
+              <Label className="mb-1 block text-xs">{isRtl ? 'العنوان (AR)' : 'Title (AR)'}</Label>
+              <Input value={settings.ctaTitleAr || ''} onChange={e => setSettings({ ...settings, ctaTitleAr: e.target.value })} className="bg-background" dir="rtl" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="mb-1 block text-xs">{isRtl ? 'الوصف (EN)' : 'Subtitle (EN)'}</Label>
+              <textarea value={settings.ctaSubtitle || ''} onChange={e => setSettings({ ...settings, ctaSubtitle: e.target.value })} className="w-full min-h-[60px] p-2 rounded-lg bg-background border border-border text-sm" />
+            </div>
+            <div>
+              <Label className="mb-1 block text-xs">{isRtl ? 'الوصف (AR)' : 'Subtitle (AR)'}</Label>
+              <textarea value={settings.ctaSubtitleAr || ''} onChange={e => setSettings({ ...settings, ctaSubtitleAr: e.target.value })} className="w-full min-h-[60px] p-2 rounded-lg bg-background border border-border text-sm" dir="rtl" />
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      <Button onClick={handleSave} disabled={saving} className="w-full bg-gradient-to-r from-[#00d4ff] to-[#9d4edd] text-white border-0">
+        {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Save className="h-4 w-4 me-2" />{isRtl ? 'حفظ المحتوى' : 'Save Content'}</>}
+      </Button>
+    </div>
   )
 }
 

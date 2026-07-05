@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAppStore } from '@/lib/store'
 import { Navbar } from '@/components/shared/navbar'
@@ -34,21 +34,8 @@ import { SettingsPage } from '@/components/dashboard/settings'
 // Admin
 import { AdminPanel } from '@/components/admin/admin-panel'
 
-// Simple loading screen
-function LoadingScreen() {
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-background">
-      <div className="flex flex-col items-center gap-4">
-        <div className="w-12 h-12 rounded-full border-4 border-[#00d4ff]/20 border-t-[#00d4ff] animate-spin" />
-        <p className="text-sm text-muted-foreground">Loading...</p>
-      </div>
-    </div>
-  )
-}
-
 export default function Home() {
   const { lang, user, view, sidebarOpen, fetchCurrentUser } = useAppStore()
-  const [authChecked, setAuthChecked] = useState(false)
 
   // Set document direction based on language
   useEffect(() => {
@@ -56,26 +43,10 @@ export default function Home() {
     document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr'
   }, [lang])
 
-  // Check auth on mount - verify session is still valid
+  // Check auth on mount (non-blocking, no loading screen)
   useEffect(() => {
-    let mounted = true
-    const checkAuth = async () => {
-      try {
-        await fetchCurrentUser()
-      } catch (e) {
-        // Ignore errors - user just isn't logged in
-      } finally {
-        if (mounted) setAuthChecked(true)
-      }
-    }
-    checkAuth()
-    return () => { mounted = false }
+    fetchCurrentUser().catch(() => {})
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Show loading while checking auth (prevents flash of wrong content)
-  if (!authChecked) {
-    return <LoadingScreen />
-  }
 
   // Determine if we're in the app (authenticated) view
   const isAppView = user && view !== 'home' && view !== 'news' && view !== 'faq' && view !== 'terms' && view !== 'privacy'

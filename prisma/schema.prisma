@@ -278,6 +278,24 @@ model AdminSettings {
   miningAutoRenewDefault Boolean @default(false) // Default auto-renew for new plans
   minMiningBalance      Float    @default(0.01) // Min balance to withdraw mining profits
   
+  // Landing Page Content (admin-editable)
+  heroBadge             String   @default("The #1 Investment Platform of 2026")
+  heroTitle1            String   @default("The Future of")
+  heroTitle2            String   @default("Crypto Mining")
+  heroSubtitle          String   @default("A luxury investment platform combining advanced mining technology with institutional-grade security. Start your journey to financial freedom today with daily returns up to 5%.")
+  heroBadgeAr           String   @default("منصة الاستثمار رقم 1 لعام 2026")
+  heroTitle1Ar          String   @default("مستقبل التعدين")
+  heroTitle2Ar          String   @default("العملات الرقمية")
+  heroSubtitleAr        String   @default("منصة استثمار فاخرة تجمع بين تقنيات التعدين المتقدمة وأمان مؤسسي. ابدأ رحلتك نحو الحرية المالية اليوم مع عوائد يومية تصل إلى 5%.")
+  ctaTitle              String   @default("Ready to Start Your Journey?")
+  ctaTitleAr            String   @default("جاهز لبدء رحلتك؟")
+  ctaSubtitle           String   @default("Join today and get a $25 welcome bonus, 7-day free Basic plan, and entry into monthly $50,000 giveaways.")
+  ctaSubtitleAr         String   @default("انضم اليوم واحصل على مكافأة ترحيب 25$، خطة أساسية مجانية لمدة 7 أيام، ودخول في سحوبات شهرية بقيمة 50,000$.")
+  statInvestors         String   @default("250,000+")
+  statVolume            String   @default("$48M+")
+  statCountries         String   @default("120+")
+  statUptime            String   @default("99.98%")
+  
   updatedAt             DateTime @updatedAt
 }
 

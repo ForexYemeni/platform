@@ -1,12 +1,23 @@
 'use client'
 
 import { motion } from 'framer-motion'
+import { useState, useEffect } from 'react'
 import { ArrowRight, Gift, Sparkles } from 'lucide-react'
 import { useAppStore } from '@/lib/store'
 import { Button } from '@/components/ui/button'
 
 export function CTA() {
   const { lang, setAuthStage } = useAppStore()
+  const [content, setContent] = useState<any>(null)
+
+  useEffect(() => {
+    fetch('/api/landing')
+      .then(r => r.json())
+      .then(d => { if (d.success && d.data.content) setContent(d.data.content) })
+      .catch(() => {})
+  }, [])
+
+  const getText = (en: string, ar: string) => lang === 'ar' ? ar : en
 
   return (
     <section className="relative py-24 lg:py-32 overflow-hidden">
@@ -39,13 +50,16 @@ export function CTA() {
             </motion.div>
 
             <h2 className="text-4xl md:text-6xl font-black tracking-tight mb-4">
-              {lang === 'ar' ? 'جاهز لبدء ' : 'Ready to Start '}
-              <span className="text-gradient-electric">{lang === 'ar' ? 'رحلتك؟' : 'Your Journey?'}</span>
+              {content
+                ? getText(content.ctaTitle, content.ctaTitleAr)
+                : (lang === 'ar' ? 'جاهز لبدء رحلتك؟' : 'Ready to Start Your Journey?')}
             </h2>
             <p className="text-lg text-muted-foreground mb-8 max-w-2xl mx-auto">
-              {lang === 'ar'
-                ? 'انضم اليوم واحصل على مكافأة ترحيب 25$، خطة أساسية مجانية لمدة 7 أيام، ودخول في سحوبات شهرية بقيمة 50,000$.'
-                : 'Join today and get a $25 welcome bonus, 7-day free Basic plan, and entry into monthly $50,000 giveaways.'}
+              {content
+                ? getText(content.ctaSubtitle, content.ctaSubtitleAr)
+                : (lang === 'ar'
+                  ? 'انضم اليوم واحصل على مكافأة ترحيب 25$، خطة أساسية مجانية لمدة 7 أيام، ودخول في سحوبات شهرية بقيمة 50,000$.'
+                  : 'Join today and get a $25 welcome bonus, 7-day free Basic plan, and entry into monthly $50,000 giveaways.')}
             </p>
 
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">

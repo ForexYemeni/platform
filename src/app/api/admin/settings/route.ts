@@ -34,6 +34,11 @@ export async function PUT(req: NextRequest) {
       // Mining control fields
       'miningMode', 'miningStartTime', 'miningDurationHours',
       'miningAutoRenewDefault', 'minMiningBalance',
+      // Landing page content
+      'heroBadge', 'heroTitle1', 'heroTitle2', 'heroSubtitle',
+      'heroBadgeAr', 'heroTitle1Ar', 'heroTitle2Ar', 'heroSubtitleAr',
+      'ctaTitle', 'ctaTitleAr', 'ctaSubtitle', 'ctaSubtitleAr',
+      'statInvestors', 'statVolume', 'statCountries', 'statUptime',
     ]
 
     const data: any = {}
