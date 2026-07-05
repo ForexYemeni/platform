@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { db } from '@/lib/db'
 import { getCurrentUser, apiSuccess, apiError } from '@/lib/auth'
+import { getMakkahNow, calculateMiningEndTime } from '@/lib/makkah-time'
 
 // Get all available plans + mining settings
 export async function GET() {
@@ -26,8 +27,8 @@ export async function GET() {
       if (s) settings = s
     } catch {}
 
-    // Calculate mining status for user
-    const now = new Date()
+    // Calculate mining status for user (using Makkah time)
+    const now = getMakkahNow()
     const isMiningActive = user.miningExpiresAt && new Date(user.miningExpiresAt) > now
     const miningExpired = user.miningExpiresAt && new Date(user.miningExpiresAt) <= now && user.lastMiningActivation
 
@@ -130,40 +131,36 @@ export async function POST(req: NextRequest) {
         return apiError('No active plan. Activate a plan first.', 400)
       }
 
-      // Check if already mining
-      if (user.miningExpiresAt && new Date(user.miningExpiresAt) > new Date()) {
+      // Check if already mining (using Makkah time)
+      const makkahNow = getMakkahNow()
+      if (user.miningExpiresAt && new Date(user.miningExpiresAt) > makkahNow) {
         return apiError('Mining already active. Wait for it to expire.', 400)
       }
 
       // If previous session expired, calculate profit first
-      if (user.miningExpiresAt && new Date(user.miningExpiresAt) <= new Date() && user.lastMiningActivation) {
+      if (user.miningExpiresAt && new Date(user.miningExpiresAt) <= makkahNow && user.lastMiningActivation) {
         await calculateAndStoreMiningProfit(user.id)
       }
 
       // Get settings
       let durationHours = 24
-      let startTime = new Date()
+      let startHour = -1
       try {
         const s = await db.adminSettings.findUnique({ where: { id: 'singleton' } })
         if (s) {
           durationHours = s.miningDurationHours || 24
-          // If miningStartTime is set, align to that hour
-          if (s.miningStartTime >= 0 && s.miningStartTime < 24) {
-            startTime = new Date()
-            startTime.setHours(s.miningStartTime, 0, 0, 0)
-            // If start time is in the past today, use it directly
-            // If in the future, it's fine - mining will end at start + duration
-          }
+          startHour = s.miningStartTime >= 0 && s.miningStartTime < 24 ? s.miningStartTime : -1
         }
       } catch {}
 
-      const expiresAt = new Date(startTime.getTime() + durationHours * 60 * 60 * 1000)
+      // Calculate start and end times using Makkah timezone
+      const { start, end } = calculateMiningEndTime(startHour >= 0 ? startHour : makkahNow.getHours(), durationHours)
 
       await db.user.update({
         where: { id: user.id },
         data: {
-          lastMiningActivation: startTime,
-          miningExpiresAt: expiresAt,
+          lastMiningActivation: start,
+          miningExpiresAt: end,
         }
       })
 
@@ -178,8 +175,8 @@ export async function POST(req: NextRequest) {
 
       return apiSuccess({
         message: 'Mining activated',
-        expiresAt: expiresAt.toISOString(),
-        startTime: startTime.toISOString(),
+        expiresAt: end.toISOString(),
+        startTime: start.toISOString(),
       })
     }
 

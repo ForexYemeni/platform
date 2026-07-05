@@ -1403,11 +1403,16 @@ function MiningControlManager({ onRefresh }: { onRefresh: () => void }) {
               onChange={e => setSettings({ ...settings, miningStartTime: parseInt(e.target.value) })}
               className="w-full h-10 px-3 rounded-lg bg-background border border-border"
             >
-              {Array.from({ length: 24 }).map((_, h) => (
-                <option key={h} value={h}>
-                  {h.toString().padStart(2, '0')}:00 {h < 12 ? 'AM' : 'PM'} ({h < 12 ? isRtl ? 'صباحاً' : 'Morning' : isRtl ? 'مساءً' : 'Evening'})
-                </option>
-              ))}
+              {Array.from({ length: 24 }).map((_, h) => {
+                const period = h < 12 ? 'AM' : 'PM'
+                const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h
+                const periodAr = h < 12 ? 'صباحاً' : 'مساءً'
+                return (
+                  <option key={h} value={h}>
+                    {h12}:00 {period} ({isRtl ? periodAr : (h < 12 ? 'Morning' : 'Evening')}) - مكة
+                  </option>
+                )
+              })}
             </select>
             <p className="text-xs text-muted-foreground mt-1">
               {isRtl ? 'الوقت الذي يبدأ عنده التعدين التلقائي أو المقترح للمستخدم' : 'When auto mining starts or suggested time for manual'}

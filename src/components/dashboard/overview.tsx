@@ -109,11 +109,18 @@ export function DashboardOverview() {
 
   const hasActivePlan = dashboardData?.user?.isMiningActive || (user?.activePlan && user?.planExpiresAt && new Date(user.planExpiresAt) > new Date())
 
+  // Calculate real daily profit rate from active plan
+  const dailyProfitRate = user?.activePlan ? (user.activePlan.investment * user.activePlan.dailyProfit / 100) : 0
+  // Monthly = daily × 30
+  const monthlyProfitRate = dailyProfitRate * 30
+  // Accumulated mining profits (withdrawable)
+  const accumulatedProfit = (user as any)?.accumulatedProfit || 0
+
   const stats = [
     {
       label: isRtl ? 'الرصيد الحالي' : 'Current Balance',
       value: `$${(user?.balance || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
-      change: user?.balance > 0 ? '+0%' : '0%',
+      change: user?.balance > 0 ? (isRtl ? 'قابل للسحب' : 'Withdrawable') : '0',
       positive: true,
       icon: Wallet,
       color: '#00d4ff',
@@ -122,7 +129,7 @@ export function DashboardOverview() {
     {
       label: isRtl ? 'إجمالي الأرباح' : 'Total Profit',
       value: `$${(user?.totalProfit || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
-      change: user?.totalProfit > 0 ? '+0%' : '0%',
+      change: user?.totalProfit > 0 ? (isRtl ? 'مكتسب' : 'Earned') : '0',
       positive: true,
       icon: TrendingUp,
       color: '#10b981',
@@ -131,7 +138,7 @@ export function DashboardOverview() {
     {
       label: isRtl ? 'الأرباح اليومية' : 'Daily Profit',
       value: hasActivePlan ? `$${liveProfit.toFixed(4)}` : '$0.00',
-      change: hasActivePlan ? (isRtl ? 'مباشر' : 'Live') : (isRtl ? 'لا يوجد تعدين' : 'No mining'),
+      change: hasActivePlan ? (isRtl ? `مباشر (${dailyProfitRate.toFixed(2)}/يوم)` : `Live ($${dailyProfitRate.toFixed(2)}/day)`) : (isRtl ? 'لا يوجد تعدين' : 'No mining'),
       positive: hasActivePlan,
       icon: Zap,
       color: '#ffd700',
@@ -140,9 +147,9 @@ export function DashboardOverview() {
     },
     {
       label: isRtl ? 'الأرباح الشهرية' : 'Monthly Profit',
-      value: `$${(user?.monthlyProfit || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
-      change: user?.monthlyProfit > 0 ? '+0%' : '0%',
-      positive: true,
+      value: `$${monthlyProfitRate.toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
+      change: hasActivePlan ? (isRtl ? 'متوقع' : 'Projected') : '0',
+      positive: hasActivePlan,
       icon: Activity,
       color: '#9d4edd',
       bg: 'from-[#9d4edd]/20 to-[#9d4edd]/5',

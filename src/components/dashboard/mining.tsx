@@ -104,7 +104,7 @@ export function MiningPage() {
     return () => clearInterval(interval)
   }, [miningData, user?.activePlan, miningSettings])
 
-  const hasActivePlan = user?.activePlan && user?.planExpiresAt && new Date(user.planExpiresAt) > new Date()
+  const hasActivePlan = user?.activePlan && user?.planExpiresAt && new Date(user.planExpiresAt).getTime() > Date.now()
   const isMiningActive = miningData?.isMiningActive
 
   const handleActivateMining = async () => {
