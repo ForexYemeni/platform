@@ -6,7 +6,7 @@ import {
   Users, DollarSign, TrendingUp, TrendingDown, Search, MoreHorizontal,
   Shield, CheckCircle2, XCircle, Clock, Ban, Edit, Send, Plus,
   Cpu, CreditCard, CheckSquare, Settings, Activity, Crown, AlertCircle, Save,
-  Trash2, Wallet, X, Loader2, Gift
+  Trash2, Wallet, X, Loader2, Gift, Power, Zap
 } from 'lucide-react'
 import { AreaChart, Area, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid, PieChart, Pie, Cell } from 'recharts'
 import { useAppStore } from '@/lib/store'
@@ -290,6 +290,7 @@ export function AdminPanel() {
           <TabsTrigger value="wallets"><Wallet className="h-4 w-4 me-2" />{isRtl ? 'المحافظ' : 'Wallets'}</TabsTrigger>
           <TabsTrigger value="rewards"><Gift className="h-4 w-4 me-2" />{isRtl ? 'المكافآت' : 'Rewards'}</TabsTrigger>
           <TabsTrigger value="referrals"><Users className="h-4 w-4 me-2" />{isRtl ? 'الإحالات' : 'Referrals'}</TabsTrigger>
+          <TabsTrigger value="mining"><Cpu className="h-4 w-4 me-2" />{isRtl ? 'التعدين' : 'Mining'}</TabsTrigger>
           <TabsTrigger value="settings"><Settings className="h-4 w-4 me-2" />{isRtl ? 'الإعدادات' : 'Settings'}</TabsTrigger>
         </TabsList>
 
@@ -392,6 +393,11 @@ export function AdminPanel() {
         {/* === REFERRALS === */}
         <TabsContent value="referrals">
           <ReferralsManager />
+        </TabsContent>
+
+        {/* === MINING CONTROL === */}
+        <TabsContent value="mining">
+          <MiningControlManager onRefresh={fetchAllData} />
         </TabsContent>
 
         {/* === SETTINGS === */}
@@ -1307,6 +1313,169 @@ function UserReferralDetail({ user, onClose }: { user: any, onClose: () => void 
         </div>
       </motion.div>
     </motion.div>
+  )
+}
+
+// ============================================
+// MINING CONTROL MANAGER - Full mining system control
+// ============================================
+function MiningControlManager({ onRefresh }: { onRefresh: () => void }) {
+  const { lang } = useAppStore()
+  const isRtl = lang === 'ar'
+  const [settings, setSettings] = useState<any>(null)
+  const [saving, setSaving] = useState(false)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetch('/api/admin/settings').then(r => r.json()).then(d => {
+      if (d.success) setSettings(d.data.settings)
+      setLoading(false)
+    })
+  }, [])
+
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      const res = await fetch('/api/admin/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          miningMode: settings.miningMode,
+          miningStartTime: parseInt(settings.miningStartTime),
+          miningDurationHours: parseInt(settings.miningDurationHours),
+          miningAutoRenewDefault: settings.miningAutoRenewDefault,
+          minMiningBalance: parseFloat(settings.minMiningBalance),
+        })
+      })
+      const d = await res.json()
+      if (d.success) {
+        toast.success(isRtl ? 'تم حفظ إعدادات التعدين' : 'Mining settings saved')
+        onRefresh()
+      } else toast.error(d.error)
+    } catch (e) { toast.error('Network error') }
+    finally { setSaving(false) }
+  }
+
+  if (loading || !settings) return <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-[#00d4ff]" /></div>
+
+  return (
+    <div className="space-y-4">
+      {/* Mining Mode */}
+      <Card className="p-5 glass border-border">
+        <h3 className="font-bold mb-4 flex items-center gap-2">
+          <Cpu className="h-5 w-5 text-[#00d4ff]" />
+          {isRtl ? 'إعدادات التحكم بالتعدين' : 'Mining Control Settings'}
+        </h3>
+
+        <div className="space-y-4">
+          {/* Mining Mode */}
+          <div className="p-4 rounded-xl glass">
+            <Label className="mb-3 block">{isRtl ? 'وضع التعدين' : 'Mining Mode'}</Label>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => setSettings({ ...settings, miningMode: 'manual' })}
+                className={`p-4 rounded-xl border-2 transition-all flex items-center gap-3 ${settings.miningMode === 'manual' ? 'border-[#00d4ff] bg-[#00d4ff]/10' : 'border-border glass'}`}
+              >
+                <Power className="h-5 w-5" />
+                <div className="text-start">
+                  <div className="font-medium text-sm">{isRtl ? 'يدوي' : 'Manual'}</div>
+                  <div className="text-xs text-muted-foreground">{isRtl ? 'المستخدم يفعّل يومياً' : 'User activates daily'}</div>
+                </div>
+              </button>
+              <button
+                onClick={() => setSettings({ ...settings, miningMode: 'auto' })}
+                className={`p-4 rounded-xl border-2 transition-all flex items-center gap-3 ${settings.miningMode === 'auto' ? 'border-[#10b981] bg-[#10b981]/10' : 'border-border glass'}`}
+              >
+                <Zap className="h-5 w-5" />
+                <div className="text-start">
+                  <div className="font-medium text-sm">{isRtl ? 'تلقائي' : 'Automatic'}</div>
+                  <div className="text-xs text-muted-foreground">{isRtl ? 'يبدأ تلقائياً' : 'Starts automatically'}</div>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          {/* Start Time */}
+          <div className="p-4 rounded-xl glass">
+            <Label className="mb-2 block">{isRtl ? 'وقت بدء التعدين (الساعة)' : 'Mining Start Time (Hour)'}</Label>
+            <select
+              value={settings.miningStartTime || 0}
+              onChange={e => setSettings({ ...settings, miningStartTime: parseInt(e.target.value) })}
+              className="w-full h-10 px-3 rounded-lg bg-background border border-border"
+            >
+              {Array.from({ length: 24 }).map((_, h) => (
+                <option key={h} value={h}>
+                  {h.toString().padStart(2, '0')}:00 {h < 12 ? 'AM' : 'PM'} ({h < 12 ? isRtl ? 'صباحاً' : 'Morning' : isRtl ? 'مساءً' : 'Evening'})
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground mt-1">
+              {isRtl ? 'الوقت الذي يبدأ عنده التعدين التلقائي أو المقترح للمستخدم' : 'When auto mining starts or suggested time for manual'}
+            </p>
+          </div>
+
+          {/* Duration */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="p-4 rounded-xl glass">
+              <Label className="mb-2 block">{isRtl ? 'مدة التعدين (ساعات)' : 'Mining Duration (Hours)'}</Label>
+              <Input
+                type="number"
+                value={settings.miningDurationHours || 24}
+                onChange={e => setSettings({ ...settings, miningDurationHours: e.target.value })}
+                className="bg-background"
+                min="1"
+                max="48"
+              />
+            </div>
+            <div className="p-4 rounded-xl glass">
+              <Label className="mb-2 block">{isRtl ? 'الحد الأدنى للسحب ($)' : 'Min Withdrawal ($)'}</Label>
+              <Input
+                type="number"
+                step="0.01"
+                value={settings.minMiningBalance || 0.01}
+                onChange={e => setSettings({ ...settings, minMiningBalance: e.target.value })}
+                className="bg-background"
+                min="0.01"
+              />
+            </div>
+          </div>
+
+          {/* Auto-renew default */}
+          <div className="flex items-center justify-between p-4 rounded-xl glass">
+            <div>
+              <span className="text-sm font-medium">{isRtl ? 'التعدين التلقائي افتراضياً' : 'Auto-Renew Default'}</span>
+              <p className="text-xs text-muted-foreground mt-1">
+                {isRtl ? 'تفعيل التعدين التلقائي للمستخدمين الجدد افتراضياً' : 'Enable auto-renew by default for new users'}
+              </p>
+            </div>
+            <Switch
+              checked={settings.miningAutoRenewDefault || false}
+              onCheckedChange={v => setSettings({ ...settings, miningAutoRenewDefault: v })}
+            />
+          </div>
+
+          {/* Info box */}
+          <div className="p-4 rounded-xl bg-[#00d4ff]/5 border border-[#00d4ff]/20">
+            <div className="flex items-start gap-2">
+              <AlertCircle className="h-4 w-4 text-[#00d4ff] flex-shrink-0 mt-0.5" />
+              <div className="text-xs text-muted-foreground space-y-1">
+                <p className="font-medium text-foreground">{isRtl ? 'كيف يعمل نظام التعدين:' : 'How mining system works:'}</p>
+                <p>{isRtl ? '• المستخدم يفعّل التعدين يومياً (يدوياً أو تلقائياً)' : '• User activates mining daily (manual or auto)'}</p>
+                <p>{isRtl ? '• التعدين يدوم حسب المدة المحددة (افتراضي 24 ساعة)' : '• Mining lasts for specified duration (default 24h)'}</p>
+                <p>{isRtl ? '• الأرباح تُحسب بناءً على الوقت الفعلي للتعدين' : '• Profits calculated based on actual mining time'}</p>
+                <p>{isRtl ? '• عند انتهاء الجلسة، تُضاف الأرباح للمتراكم' : '• When session ends, profits added to accumulated'}</p>
+                <p>{isRtl ? '• المستخدم يسحب الأرباح المتراكمة (رأس المال مقفل)' : '• User withdraws accumulated (capital locked)'}</p>
+                <p>{isRtl ? '• رأس المال يُعاد عند انتهاء الخطة' : '• Capital returned when plan expires'}</p>
+              </div>
+            </div>
+          </div>
+
+          <Button onClick={handleSave} disabled={saving} className="w-full bg-gradient-to-r from-[#00d4ff] to-[#9d4edd] text-white border-0">
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Save className="h-4 w-4 me-2" />{isRtl ? 'حفظ إعدادات التعدين' : 'Save Mining Settings'}</>}
+          </Button>
+        </div>
+      </Card>
+    </div>
   )
 }
 

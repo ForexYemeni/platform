@@ -66,6 +66,13 @@ model User {
   planActivatedAt  DateTime?
   planExpiresAt    DateTime?
   
+  // Daily Mining System (24h activation)
+  lastMiningActivation DateTime?  // When user last activated daily mining
+  miningExpiresAt      DateTime?  // When current 24h mining session expires
+  miningAutoRenew      Boolean  @default(false)  // Auto-activate daily mining
+  accumulatedProfit    Float    @default(0)  // Profits ready to withdraw (separate from capital)
+  totalMiningDays      Int      @default(0)  // Total days mined
+  
   // Timestamps
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
@@ -263,6 +270,14 @@ model AdminSettings {
   smtpPort              Int?
   smtpUser              String?
   smtpPass              String?
+  
+  // Mining Control Settings
+  miningMode            String   @default("manual") // "manual" or "auto"
+  miningStartTime       Int      @default(0) // Hour of day (0-23) when mining starts
+  miningDurationHours   Int      @default(24) // Duration in hours (default 24)
+  miningAutoRenewDefault Boolean @default(false) // Default auto-renew for new plans
+  minMiningBalance      Float    @default(0.01) // Min balance to withdraw mining profits
+  
   updatedAt             DateTime @updatedAt
 }
 

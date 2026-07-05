@@ -2,23 +2,119 @@ import { NextRequest } from 'next/server'
 import { db } from '@/lib/db'
 import { getCurrentUser, apiSuccess, apiError } from '@/lib/auth'
 
-// Get all available plans
+// Get all available plans + mining settings
 export async function GET() {
   try {
+    const user = await getCurrentUser()
+    if (!user) return apiError('Unauthorized', 401)
     if (!db) return apiError('Database not configured', 500)
-    
+
     const plans = await db.plan.findMany({
       where: { active: true },
       orderBy: { investment: 'asc' },
     })
 
-    return apiSuccess({ plans })
+    // Get mining settings
+    let settings: any = {
+      miningMode: 'manual',
+      miningStartTime: 0,
+      miningDurationHours: 24,
+      minMiningBalance: 0.01,
+    }
+    try {
+      const s = await db.adminSettings.findUnique({ where: { id: 'singleton' } })
+      if (s) settings = s
+    } catch {}
+
+    // Calculate mining status for user
+    const now = new Date()
+    const isMiningActive = user.miningExpiresAt && new Date(user.miningExpiresAt) > now
+    const miningExpired = user.miningExpiresAt && new Date(user.miningExpiresAt) <= now && user.lastMiningActivation
+
+    // If mining expired, calculate and move profits to accumulatedProfit
+    if (miningExpired && user.activePlanId && user.lastMiningActivation) {
+      await calculateAndStoreMiningProfit(user.id)
+    }
+
+    return apiSuccess({
+      plans,
+      settings: {
+        miningMode: settings.miningMode,
+        miningStartTime: settings.miningStartTime,
+        miningDurationHours: settings.miningDurationHours,
+        minMiningBalance: settings.minMiningBalance,
+      },
+      mining: {
+        isMiningActive,
+        lastActivation: user.lastMiningActivation?.toISOString() || null,
+        expiresAt: user.miningExpiresAt?.toISOString() || null,
+        autoRenew: user.miningAutoRenew,
+        accumulatedProfit: user.accumulatedProfit || 0,
+        totalMiningDays: user.totalMiningDays || 0,
+        canWithdraw: (user.accumulatedProfit || 0) >= settings.minMiningBalance,
+      }
+    })
   } catch (e: any) {
+    console.error('Mining GET error:', e)
     return apiError(e.message, 500)
   }
 }
 
-// Activate a plan
+// Helper: Calculate mining profit for expired session
+async function calculateAndStoreMiningProfit(userId: string) {
+  const user = await db.user.findUnique({
+    where: { id: userId },
+    include: { activePlan: true }
+  })
+  if (!user || !user.activePlan || !user.lastMiningActivation || !user.miningExpiresAt) return
+
+  const plan = user.activePlan
+  const startTime = new Date(user.lastMiningActivation).getTime()
+  const endTime = new Date(user.miningExpiresAt).getTime()
+  const actualEnd = Math.min(endTime, Date.now())
+  const elapsedMs = actualEnd - startTime
+  const elapsedHours = elapsedMs / (1000 * 60 * 60)
+  const elapsedDays = elapsedHours / 24
+
+  // Calculate profit: dailyProfit% × investment × days
+  const dailyProfitAmount = plan.investment * plan.dailyProfit / 100
+  const profit = dailyProfitAmount * elapsedDays
+
+  // Add to accumulatedProfit (withdrawable)
+  await db.user.update({
+    where: { id: userId },
+    data: {
+      accumulatedProfit: { increment: profit },
+      totalMiningDays: { increment: Math.floor(elapsedDays) },
+      totalProfit: { increment: profit },
+      // Reset mining session
+      lastMiningActivation: null,
+      miningExpiresAt: null,
+    }
+  })
+
+  // Create transaction record
+  await db.transaction.create({
+    data: {
+      userId,
+      type: 'PROFIT',
+      amount: profit,
+      currency: 'USDT',
+      description: `Mining profit - ${plan.name} (${elapsedHours.toFixed(1)} hours)`,
+    }
+  })
+
+  // Create notification
+  await db.notification.create({
+    data: {
+      userId,
+      type: 'SUCCESS',
+      title: '⛏️ Mining Session Complete!',
+      message: `You earned $${profit.toFixed(4)} from mining. Activate again to continue earning!`,
+    }
+  })
+}
+
 export async function POST(req: NextRequest) {
   try {
     const user = await getCurrentUser()
@@ -28,42 +124,46 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const { planId, action } = body
 
-    if (action === 'reinvest') {
-      // Calculate REAL accumulated profit based on time elapsed
-      if (!user.activePlanId || !user.planActivatedAt) {
-        return apiError('No active plan', 400)
+    // ============ ACTIVATE DAILY MINING (24h) ============
+    if (action === 'activateMining') {
+      if (!user.activePlanId || !user.activePlan) {
+        return apiError('No active plan. Activate a plan first.', 400)
       }
 
-      const plan = await db.plan.findUnique({ where: { id: user.activePlanId } })
-      if (!plan) return apiError('Plan not found', 400)
-
-      const dailyProfitAmount = plan.investment * plan.dailyProfit / 100
-      const planActivatedAt = new Date(user.planActivatedAt).getTime()
-      const now = Date.now()
-      const elapsedDays = (now - planActivatedAt) / (1000 * 60 * 60 * 24)
-      const totalEarned = dailyProfitAmount * elapsedDays
-      const unclaimedProfit = Math.max(0, totalEarned - (user.totalProfit || 0))
-
-      if (unclaimedProfit <= 0.01) {
-        return apiError('No accumulated profits to reinvest yet', 400)
+      // Check if already mining
+      if (user.miningExpiresAt && new Date(user.miningExpiresAt) > new Date()) {
+        return apiError('Mining already active. Wait for it to expire.', 400)
       }
 
-      // Add accumulated profit to balance and totalProfit
+      // If previous session expired, calculate profit first
+      if (user.miningExpiresAt && new Date(user.miningExpiresAt) <= new Date() && user.lastMiningActivation) {
+        await calculateAndStoreMiningProfit(user.id)
+      }
+
+      // Get settings
+      let durationHours = 24
+      let startTime = new Date()
+      try {
+        const s = await db.adminSettings.findUnique({ where: { id: 'singleton' } })
+        if (s) {
+          durationHours = s.miningDurationHours || 24
+          // If miningStartTime is set, align to that hour
+          if (s.miningStartTime >= 0 && s.miningStartTime < 24) {
+            startTime = new Date()
+            startTime.setHours(s.miningStartTime, 0, 0, 0)
+            // If start time is in the past today, use it directly
+            // If in the future, it's fine - mining will end at start + duration
+          }
+        }
+      } catch {}
+
+      const expiresAt = new Date(startTime.getTime() + durationHours * 60 * 60 * 1000)
+
       await db.user.update({
         where: { id: user.id },
         data: {
-          balance: { increment: unclaimedProfit },
-          totalProfit: { increment: unclaimedProfit },
-        }
-      })
-
-      await db.transaction.create({
-        data: {
-          userId: user.id,
-          type: 'PROFIT',
-          amount: unclaimedProfit,
-          currency: 'USDT',
-          description: `Reinvested profits from ${plan.name} plan`,
+          lastMiningActivation: startTime,
+          miningExpiresAt: expiresAt,
         }
       })
 
@@ -71,124 +171,154 @@ export async function POST(req: NextRequest) {
         data: {
           userId: user.id,
           type: 'SUCCESS',
-          title: '✅ Profits Reinvested!',
-          message: `$${unclaimedProfit.toFixed(4)} has been added to your balance from mining profits.`,
+          title: '⛏️ Mining Activated!',
+          message: `Daily mining started. Earn profits for ${durationHours} hours. Return tomorrow to activate again!`,
         }
       })
 
-      return apiSuccess({ message: 'Profits reinvested', amount: unclaimedProfit })
+      return apiSuccess({
+        message: 'Mining activated',
+        expiresAt: expiresAt.toISOString(),
+        startTime: startTime.toISOString(),
+      })
     }
 
-    // Activate a plan
-    if (!planId) return apiError('Plan ID required', 400)
-
-    const plan = await db.plan.findUnique({ where: { id: planId } })
-    if (!plan) return apiError('Plan not found', 404)
-
-    if (user.balance < plan.investment) {
-      return apiError('Insufficient balance. Please deposit first.', 400)
+    // ============ TOGGLE AUTO-RENEW ============
+    if (action === 'toggleAutoRenew') {
+      const updated = await db.user.update({
+        where: { id: user.id },
+        data: { miningAutoRenew: !user.miningAutoRenew }
+      })
+      return apiSuccess({ autoRenew: updated.miningAutoRenew })
     }
 
-    // Check if user already has active plan
-    if (user.activePlanId && user.planExpiresAt && user.planExpiresAt > new Date()) {
-      return apiError('You already have an active plan', 400)
-    }
+    // ============ WITHDRAW MINING PROFITS ============
+    if (action === 'withdrawProfits') {
+      const profit = user.accumulatedProfit || 0
 
-    // Deduct investment
-    const expiresAt = new Date()
-    expiresAt.setDate(expiresAt.getDate() + plan.duration)
+      // Get min balance from settings
+      let minBalance = 0.01
+      try {
+        const s = await db.adminSettings.findUnique({ where: { id: 'singleton' } })
+        if (s) minBalance = s.minMiningBalance
+      } catch {}
 
-    await db.user.update({
-      where: { id: user.id },
-      data: {
-        balance: { decrement: plan.investment },
-        activePlanId: plan.id,
-        planActivatedAt: new Date(),
-        planExpiresAt: expiresAt,
-        dailyProfit: plan.investment * plan.dailyProfit / 100,
+      if (profit < minBalance) {
+        return apiError(`Minimum withdrawal is $${minBalance}. Current: $${profit.toFixed(4)}`, 400)
       }
-    })
 
-    await db.transaction.create({
-      data: {
-        userId: user.id,
-        type: 'DEPOSIT',
-        amount: plan.investment,
-        currency: 'USDT',
-        description: `Activated ${plan.name} plan`,
-      }
-    })
-
-    await db.notification.create({
-      data: {
-        userId: user.id,
-        type: 'SUCCESS',
-        title: 'Plan Activated!',
-        message: `${plan.name} plan is now active. Daily profit: ${plan.dailyProfit}%`,
-      }
-    })
-
-    // Process referral commission (Level 1: 10%)
-    if (user.referredById) {
-      const commission = plan.investment * 0.10
+      // Move profits to balance (withdrawable)
       await db.user.update({
-        where: { id: user.referredById },
-        data: { balance: { increment: commission } }
-      })
-      await db.referralEarning.create({
+        where: { id: user.id },
         data: {
-          referrerId: user.referredById,
-          referredId: user.id,
-          level: 1,
-          percentage: 10,
-          amount: commission,
-          source: 'plan_activation',
+          balance: { increment: profit },
+          accumulatedProfit: 0,
         }
       })
 
-      // Level 2: 5%
-      const referrer = await db.user.findUnique({ where: { id: user.referredById } })
-      if (referrer?.referredById) {
-        const commission2 = plan.investment * 0.05
+      await db.transaction.create({
+        data: {
+          userId: user.id,
+          type: 'PROFIT',
+          amount: profit,
+          currency: 'USDT',
+          description: 'Mining profits withdrawal',
+        }
+      })
+
+      await db.notification.create({
+        data: {
+          userId: user.id,
+          type: 'SUCCESS',
+          title: '✅ Profits Withdrawn!',
+          message: `$${profit.toFixed(4)} moved to your balance. Capital remains invested until plan ends.`,
+        }
+      })
+
+      return apiSuccess({ amount: profit })
+    }
+
+    // ============ ACTIVATE PLAN ============
+    if (planId) {
+      const plan = await db.plan.findUnique({ where: { id: planId } })
+      if (!plan) return apiError('Plan not found', 404)
+
+      if (user.balance < plan.investment) {
+        return apiError('Insufficient balance. Please deposit first.', 400)
+      }
+
+      if (user.activePlanId && user.planExpiresAt && new Date(user.planExpiresAt) > new Date()) {
+        return apiError('You already have an active plan', 400)
+      }
+
+      // Deduct investment (capital stays until plan ends)
+      const expiresAt = new Date()
+      expiresAt.setDate(expiresAt.getDate() + plan.duration)
+
+      // Get auto-renew default from settings
+      let autoRenew = false
+      try {
+        const s = await db.adminSettings.findUnique({ where: { id: 'singleton' } })
+        if (s) autoRenew = s.miningAutoRenewDefault
+      } catch {}
+
+      await db.user.update({
+        where: { id: user.id },
+        data: {
+          balance: { decrement: plan.investment },
+          activePlanId: plan.id,
+          planActivatedAt: new Date(),
+          planExpiresAt: expiresAt,
+          dailyProfit: plan.investment * plan.dailyProfit / 100,
+          miningAutoRenew: autoRenew,
+          accumulatedProfit: 0,
+        }
+      })
+
+      await db.transaction.create({
+        data: {
+          userId: user.id,
+          type: 'DEPOSIT',
+          amount: plan.investment,
+          currency: 'USDT',
+          description: `Activated ${plan.name} plan (capital locked)`,
+        }
+      })
+
+      await db.notification.create({
+        data: {
+          userId: user.id,
+          type: 'SUCCESS',
+          title: '🎉 Plan Activated!',
+          message: `${plan.name} plan activated. Capital: $${plan.investment} (locked until plan ends). Now activate daily mining to earn profits!`,
+        }
+      })
+
+      // Process referral commissions
+      if (user.referredById) {
+        const commission = plan.investment * 0.10
         await db.user.update({
-          where: { id: referrer.referredById },
-          data: { balance: { increment: commission2 } }
+          where: { id: user.referredById },
+          data: { balance: { increment: commission } }
         })
         await db.referralEarning.create({
           data: {
-            referrerId: referrer.referredById,
+            referrerId: user.referredById,
             referredId: user.id,
-            level: 2,
-            percentage: 5,
-            amount: commission2,
+            level: 1,
+            percentage: 10,
+            amount: commission,
             source: 'plan_activation',
           }
         })
-
-        // Level 3: 2%
-        const referrer2 = await db.user.findUnique({ where: { id: referrer.referredById } })
-        if (referrer2?.referredById) {
-          const commission3 = plan.investment * 0.02
-          await db.user.update({
-            where: { id: referrer2.referredById },
-            data: { balance: { increment: commission3 } }
-          })
-          await db.referralEarning.create({
-            data: {
-              referrerId: referrer2.referredById,
-              referredId: user.id,
-              level: 3,
-              percentage: 2,
-              amount: commission3,
-              source: 'plan_activation',
-            }
-          })
-        }
       }
+
+      return apiSuccess({ message: 'Plan activated. Activate daily mining to start earning!' })
     }
 
-    return apiSuccess({ message: 'Plan activated successfully', planId })
+    return apiError('Invalid action', 400)
   } catch (e: any) {
+    console.error('Mining POST error:', e)
     return apiError(e.message, 500)
   }
 }

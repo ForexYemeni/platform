@@ -31,6 +31,9 @@ export async function PUT(req: NextRequest) {
       'binanceApiKey', 'coinbaseApiKey',
       'telegramBotToken', 'telegramBotUsername',
       'smtpHost', 'smtpPort', 'smtpUser', 'smtpPass',
+      // Mining control fields
+      'miningMode', 'miningStartTime', 'miningDurationHours',
+      'miningAutoRenewDefault', 'minMiningBalance',
     ]
 
     const data: any = {}
