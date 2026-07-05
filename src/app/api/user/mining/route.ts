@@ -145,14 +145,15 @@ export async function POST(req: NextRequest) {
         return apiError('No active plan. Activate a plan first.', 400)
       }
 
-      // Check if already mining
-      const now = getMakkahNow()
+      const now = new Date()
+
+      // If there's an existing session that hasn't expired → reject
       if (user.miningExpiresAt && new Date(user.miningExpiresAt) > now) {
         return apiError('Mining already active. Wait for it to expire.', 400)
       }
 
-      // If previous session expired, calculate profit first
-      if (user.miningExpiresAt && new Date(user.miningExpiresAt) <= now && user.lastMiningActivation) {
+      // If previous session exists (expired or not) → clear it and calculate profit
+      if (user.lastMiningActivation && user.miningExpiresAt) {
         await calculateAndStoreMiningProfit(user.id)
       }
 
@@ -163,7 +164,7 @@ export async function POST(req: NextRequest) {
         if (s) durationHours = s.miningDurationHours || 24
       } catch {}
 
-      // Start mining NOW, end = now + duration
+      // Start mining NOW
       const miningStart = new Date()
       const miningEnd = new Date(miningStart.getTime() + durationHours * 60 * 60 * 1000)
 
