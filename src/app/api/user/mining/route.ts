@@ -29,9 +29,29 @@ export async function GET() {
 
     // Calculate mining status for user (using Makkah time)
     const now = getMakkahNow()
-    const isMiningActive = user.miningExpiresAt && new Date(user.miningExpiresAt) > now
-    const isPending = user.lastMiningActivation && new Date(user.lastMiningActivation) > now && user.miningExpiresAt && new Date(user.miningExpiresAt) > now
-    const miningExpired = user.miningExpiresAt && new Date(user.miningExpiresAt) <= now && user.lastMiningActivation
+    const startTime = user.lastMiningActivation ? new Date(user.lastMiningActivation) : null
+    const endTime = user.miningExpiresAt ? new Date(user.miningExpiresAt) : null
+
+    let isMiningActive = false
+    let isPending = false
+
+    if (startTime && endTime) {
+      if (startTime > now && endTime > now) {
+        // Start time is in the future → pending
+        isPending = true
+        isMiningActive = false
+      } else if (startTime <= now && endTime > now) {
+        // Mining is active now
+        isMiningActive = true
+        isPending = false
+      } else if (endTime <= now) {
+        // Mining expired
+        isMiningActive = false
+        isPending = false
+      }
+    }
+
+    const miningExpired = endTime && endTime <= now && startTime
 
     // If mining expired, calculate and move profits to accumulatedProfit
     if (miningExpired && user.activePlanId && user.lastMiningActivation) {
@@ -47,7 +67,7 @@ export async function GET() {
         minMiningBalance: settings.minMiningBalance,
       },
       mining: {
-        isMiningActive: isMiningActive && !isPending,
+        isMiningActive,
         isPending,
         lastActivation: user.lastMiningActivation?.toISOString() || null,
         expiresAt: user.miningExpiresAt?.toISOString() || null,

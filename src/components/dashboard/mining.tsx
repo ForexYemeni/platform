@@ -73,6 +73,8 @@ export function MiningPage() {
 
     const plan = user.activePlan
     const dailyProfitAmount = plan.investment * plan.dailyProfit / 100
+
+    // Get times from miningData (returned by API)
     const startTime = miningData.lastActivation ? new Date(miningData.lastActivation).getTime() : 0
     const endTime = miningData.expiresAt ? new Date(miningData.expiresAt).getTime() : 0
     const totalDuration = miningSettings?.miningDurationHours || 24
@@ -81,52 +83,45 @@ export function MiningPage() {
     const calc = () => {
       const now = Date.now()
 
-      // PENDING state: start time is in the future
-      if (startTime > now) {
-        const remainingToStart = startTime - now
-        if (remainingToStart > 0) {
-          const h = Math.floor(remainingToStart / (1000 * 60 * 60))
-          const m = Math.floor((remainingToStart % (1000 * 60 * 60)) / (60 * 1000))
-          const s = Math.floor((remainingToStart % (60 * 1000)) / 1000)
-          setTimeUntilStart({ hours: h, minutes: m, seconds: s })
-        } else {
-          setTimeUntilStart({ hours: 0, minutes: 0, seconds: 0 })
-        }
+      // If no mining session set, do nothing
+      if (startTime === 0 || endTime === 0) {
         setLiveProfit(0)
         return
       }
 
-      // ACTIVE state: mining has started (startTime <= now) and not expired (endTime > now)
-      if (startTime > 0 && endTime > now) {
+      // PENDING state: start time is in the future
+      if (startTime > now) {
+        const remainingToStart = startTime - now
+        const h = Math.floor(remainingToStart / (1000 * 60 * 60))
+        const m = Math.floor((remainingToStart % (1000 * 60 * 60)) / (60 * 1000))
+        const s = Math.floor((remainingToStart % (60 * 1000)) / 1000)
+        setTimeUntilStart({ hours: h, minutes: m, seconds: s })
+        setLiveProfit(0)
+        return
+      }
+
+      // ACTIVE state: startTime <= now AND endTime > now
+      if (startTime <= now && endTime > now) {
         // Calculate profit from actual start time
         const elapsedMs = now - startTime
-        const elapsedHours = Math.max(0, elapsedMs) / (1000 * 60 * 60)
-        const elapsedDays = elapsedHours / 24
+        const elapsedDays = Math.max(0, elapsedMs) / (1000 * 60 * 60 * 24)
         const profit = dailyProfitAmount * elapsedDays
         setLiveProfit(profit)
 
         // Countdown to end
         const remaining = endTime - now
-        if (remaining > 0) {
-          const hours = Math.floor(remaining / (1000 * 60 * 60))
-          const minutes = Math.floor((remaining % (1000 * 60 * 60)) / (60 * 1000))
-          const seconds = Math.floor((remaining % (60 * 1000)) / 1000)
-          const elapsed = totalDurationMs - remaining
-          const percent = Math.min(100, Math.max(0, (elapsed / totalDurationMs) * 100))
-          setTimeLeft({ hours, minutes, seconds, percent })
-        } else {
-          setTimeLeft({ hours: 0, minutes: 0, seconds: 0, percent: 100 })
-        }
+        const hours = Math.floor(remaining / (1000 * 60 * 60))
+        const minutes = Math.floor((remaining % (1000 * 60 * 60)) / (60 * 1000))
+        const seconds = Math.floor((remaining % (60 * 1000)) / 1000)
+        const elapsed = totalDurationMs - remaining
+        const percent = Math.min(100, Math.max(0, (elapsed / totalDurationMs) * 100))
+        setTimeLeft({ hours, minutes, seconds, percent })
         return
       }
 
-      // Mining expired or not active
-      if (endTime > 0 && endTime <= now) {
-        // Session ended - show full profit for the duration
-        const elapsedMs = endTime - startTime
-        const elapsedDays = Math.max(0, elapsedMs) / (1000 * 60 * 60 * 24)
-        const profit = dailyProfitAmount * elapsedDays
-        setLiveProfit(profit)
+      // Mining expired
+      if (endTime <= now) {
+        setLiveProfit(0)
         setTimeLeft({ hours: 0, minutes: 0, seconds: 0, percent: 100 })
       }
     }
@@ -134,7 +129,7 @@ export function MiningPage() {
     calc()
     const interval = setInterval(calc, 1000)
     return () => clearInterval(interval)
-  }, [miningData, user?.activePlan, miningSettings])
+  }, [miningData?.lastActivation, miningData?.expiresAt, miningData?.isMiningActive, miningData?.isPending, user?.activePlan, miningSettings?.miningDurationHours])
 
   const hasActivePlan = user?.activePlan && user?.planExpiresAt && new Date(user.planExpiresAt).getTime() > Date.now()
   const isMiningActive = miningData?.isMiningActive
