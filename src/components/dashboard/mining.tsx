@@ -64,7 +64,7 @@ export function MiningPage() {
     }
   }
 
-  // Live profit + countdown - SIMPLE AND RELIABLE
+  // Live profit + countdown - supports PENDING and ACTIVE states
   useEffect(() => {
     const startTime = miningData?.lastActivation ? new Date(miningData.lastActivation).getTime() : 0
     const endTime = miningData?.expiresAt ? new Date(miningData.expiresAt).getTime() : 0
@@ -80,10 +80,21 @@ export function MiningPage() {
     const tick = () => {
       const now = Date.now()
 
-      // Mining active: startTime <= now < endTime
+      if (startTime > now) {
+        // PENDING: countdown to start
+        const wait = startTime - now
+        setTimeUntilStart({
+          hours: Math.floor(wait / 3600000),
+          minutes: Math.floor((wait % 3600000) / 60000),
+          seconds: Math.floor((wait % 60000) / 1000),
+        })
+        setLiveProfit(0)
+        return
+      }
+
       if (startTime <= now && now < endTime) {
-        const elapsedMs = now - startTime
-        const elapsedDays = elapsedMs / (1000 * 60 * 60 * 24)
+        // ACTIVE: live profit + countdown to end
+        const elapsedDays = (now - startTime) / (1000 * 60 * 60 * 24)
         setLiveProfit(dailyProfitAmount * elapsedDays)
 
         const remaining = endTime - now

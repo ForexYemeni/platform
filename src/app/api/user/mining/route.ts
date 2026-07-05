@@ -35,11 +35,13 @@ export async function GET() {
     let isMiningActive = false
     let isPending = false
 
-    if (startTime && endTime) {
-      if (startTime <= now && endTime > now) {
+    if (startTime && endTime && endTime > now) {
+      if (startTime > now) {
+        // Start time is in the future → pending
+        isPending = true
+      } else {
+        // Start time passed, end time not reached → active
         isMiningActive = true
-      } else if (endTime <= now) {
-        // expired
       }
     }
 
@@ -147,25 +149,54 @@ export async function POST(req: NextRequest) {
 
       const now = new Date()
 
-      // If there's an existing session that hasn't expired → reject
-      if (user.miningExpiresAt && new Date(user.miningExpiresAt) > now) {
-        return apiError('Mining already active. Wait for it to expire.', 400)
-      }
-
-      // If previous session exists (expired or not) → clear it and calculate profit
+      // If there's ANY existing session → calculate profit and clear it
       if (user.lastMiningActivation && user.miningExpiresAt) {
         await calculateAndStoreMiningProfit(user.id)
       }
 
-      // Get duration from settings
+      // Get settings (start hour + duration)
       let durationHours = 24
+      let startHour = -1
       try {
         const s = await db.adminSettings.findUnique({ where: { id: 'singleton' } })
-        if (s) durationHours = s.miningDurationHours || 24
+        if (s) {
+          durationHours = s.miningDurationHours || 24
+          if (s.miningStartTime >= 0 && s.miningStartTime < 24) {
+            startHour = s.miningStartTime
+          }
+        }
       } catch {}
 
-      // Start mining NOW
-      const miningStart = new Date()
+      // Calculate mining start time based on admin's configured start hour
+      let miningStart: Date
+      if (startHour >= 0) {
+        // Admin has configured a specific start hour
+        // Create today's date at that hour
+        miningStart = new Date()
+        miningStart.setHours(startHour, 0, 0, 0)
+
+        // If that time already passed today (e.g., it's 2 PM, start was 12 PM)
+        // → miningStart stays as today at startHour (in the past)
+        // Mining is ACTIVE from that past time
+
+        // If that time is in the future (e.g., it's 11 PM, start is 12 AM = hour 0)
+        // → miningStart is tomorrow at 00:00 (in the future)
+        // Mining is PENDING until that time
+        if (miningStart.getTime() <= now.getTime()) {
+          // Start time passed today → mining starts from that time (retroactive)
+          // But don't go back more than durationHours (cap it)
+          const maxStart = new Date(now.getTime() - durationHours * 60 * 60 * 1000)
+          if (miningStart < maxStart) {
+            miningStart = maxStart // Cap: don't start more than duration ago
+          }
+        }
+        // else: miningStart is in the future → pending
+      } else {
+        // No start hour configured → start NOW
+        miningStart = new Date()
+      }
+
+      // End time = start + duration
       const miningEnd = new Date(miningStart.getTime() + durationHours * 60 * 60 * 1000)
 
       await db.user.update({
@@ -176,20 +207,24 @@ export async function POST(req: NextRequest) {
         }
       })
 
+      const isPending = miningStart.getTime() > now.getTime()
+
       await db.notification.create({
         data: {
           userId: user.id,
           type: 'SUCCESS',
-          title: '⛏️ Mining Activated!',
-          message: `Mining is now active! Earn profits for ${durationHours} hours.`,
+          title: isPending ? '⏳ Mining Scheduled!' : '⛏️ Mining Activated!',
+          message: isPending
+            ? `Mining will start at the configured time. Wait for the countdown!`
+            : `Mining is now active! Earn profits for ${durationHours} hours.`,
         }
       })
 
       return apiSuccess({
-        message: 'Mining activated',
+        message: isPending ? 'Mining scheduled' : 'Mining activated',
         startTime: miningStart.toISOString(),
         endTime: miningEnd.toISOString(),
-        isPending: false,
+        isPending,
       })
     }
 
