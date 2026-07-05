@@ -35,6 +35,7 @@ export function MiningPage() {
   const [activating, setActivating] = useState<string | null>(null)
   const [miningSettings, setMiningSettings] = useState<any>(null)
   const [miningData, setMiningData] = useState<any>(null)
+  const [liveProfit, setLiveProfit] = useState(0)
   const [timeLeft, setTimeLeft] = useState({ hours: 0, minutes: 0, seconds: 0, percent: 0 })
   const [timeUntilStart, setTimeUntilStart] = useState({ hours: 0, minutes: 0, seconds: 0 })
   const [showWithdrawModal, setShowWithdrawModal] = useState(false)
