@@ -81,8 +81,8 @@ export function MiningPage() {
     const calc = () => {
       const now = Date.now()
 
-      if (miningData.isPending && startTime > now) {
-        // PENDING state: countdown to when mining STARTS
+      // PENDING state: start time is in the future
+      if (startTime > now) {
         const remainingToStart = startTime - now
         if (remainingToStart > 0) {
           const h = Math.floor(remainingToStart / (1000 * 60 * 60))
@@ -90,20 +90,22 @@ export function MiningPage() {
           const s = Math.floor((remainingToStart % (60 * 1000)) / 1000)
           setTimeUntilStart({ hours: h, minutes: m, seconds: s })
         } else {
-          // Mining just started - transition to active
           setTimeUntilStart({ hours: 0, minutes: 0, seconds: 0 })
         }
-        setLiveProfit(0) // No profit while pending
+        setLiveProfit(0)
         return
       }
 
-      if (miningData.isMiningActive && endTime > now) {
-        // ACTIVE state: live profit + countdown to END
+      // ACTIVE state: mining has started (startTime <= now) and not expired (endTime > now)
+      if (startTime > 0 && endTime > now) {
+        // Calculate profit from actual start time
         const elapsedMs = now - startTime
-        const elapsedDays = Math.max(0, elapsedMs) / (1000 * 60 * 60 * 24)
+        const elapsedHours = Math.max(0, elapsedMs) / (1000 * 60 * 60)
+        const elapsedDays = elapsedHours / 24
         const profit = dailyProfitAmount * elapsedDays
         setLiveProfit(profit)
 
+        // Countdown to end
         const remaining = endTime - now
         if (remaining > 0) {
           const hours = Math.floor(remaining / (1000 * 60 * 60))
@@ -115,6 +117,17 @@ export function MiningPage() {
         } else {
           setTimeLeft({ hours: 0, minutes: 0, seconds: 0, percent: 100 })
         }
+        return
+      }
+
+      // Mining expired or not active
+      if (endTime > 0 && endTime <= now) {
+        // Session ended - show full profit for the duration
+        const elapsedMs = endTime - startTime
+        const elapsedDays = Math.max(0, elapsedMs) / (1000 * 60 * 60 * 24)
+        const profit = dailyProfitAmount * elapsedDays
+        setLiveProfit(profit)
+        setTimeLeft({ hours: 0, minutes: 0, seconds: 0, percent: 100 })
       }
     }
 
