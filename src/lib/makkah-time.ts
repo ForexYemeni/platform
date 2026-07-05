@@ -5,10 +5,14 @@
 export const MAKKAH_TIMEZONE = 'Asia/Riyadh' // Same as Makkah (UTC+3)
 
 /**
- * Get current time in Makkah timezone
+ * Get current time in Makkah timezone (UTC+3)
+ * Simple, reliable method - just add 3 hours to UTC
  */
 export function getMakkahNow(): Date {
-  return new Date(new Date().toLocaleString('en-US', { timeZone: MAKKAH_TIMEZONE }))
+  const now = new Date()
+  // Makkah is UTC+3. Get UTC time and add 3 hours.
+  const utcMs = now.getTime() + now.getTimezoneOffset() * 60000
+  return new Date(utcMs + 3 * 3600000)
 }
 
 /**

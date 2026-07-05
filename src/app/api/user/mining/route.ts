@@ -27,8 +27,8 @@ export async function GET() {
       if (s) settings = s
     } catch {}
 
-    // Calculate mining status for user (using Makkah time)
-    const now = getMakkahNow()
+    // Calculate mining status for user
+    const now = new Date()
     const startTime = user.lastMiningActivation ? new Date(user.lastMiningActivation) : null
     const endTime = user.miningExpiresAt ? new Date(user.miningExpiresAt) : null
 
@@ -36,18 +36,10 @@ export async function GET() {
     let isPending = false
 
     if (startTime && endTime) {
-      if (startTime > now && endTime > now) {
-        // Start time is in the future → pending
-        isPending = true
-        isMiningActive = false
-      } else if (startTime <= now && endTime > now) {
-        // Mining is active now
+      if (startTime <= now && endTime > now) {
         isMiningActive = true
-        isPending = false
       } else if (endTime <= now) {
-        // Mining expired
-        isMiningActive = false
-        isPending = false
+        // expired
       }
     }
 
@@ -153,45 +145,26 @@ export async function POST(req: NextRequest) {
         return apiError('No active plan. Activate a plan first.', 400)
       }
 
-      // Check if already mining (using Makkah time)
-      const makkahNow = getMakkahNow()
-      if (user.miningExpiresAt && new Date(user.miningExpiresAt) > makkahNow) {
+      // Check if already mining
+      const now = getMakkahNow()
+      if (user.miningExpiresAt && new Date(user.miningExpiresAt) > now) {
         return apiError('Mining already active. Wait for it to expire.', 400)
       }
 
       // If previous session expired, calculate profit first
-      if (user.miningExpiresAt && new Date(user.miningExpiresAt) <= makkahNow && user.lastMiningActivation) {
+      if (user.miningExpiresAt && new Date(user.miningExpiresAt) <= now && user.lastMiningActivation) {
         await calculateAndStoreMiningProfit(user.id)
       }
 
-      // Get settings
+      // Get duration from settings
       let durationHours = 24
-      let startHour = makkahNow.getHours()
       try {
         const s = await db.adminSettings.findUnique({ where: { id: 'singleton' } })
-        if (s) {
-          durationHours = s.miningDurationHours || 24
-          if (s.miningStartTime >= 0 && s.miningStartTime < 24) {
-            startHour = s.miningStartTime
-          }
-        }
+        if (s) durationHours = s.miningDurationHours || 24
       } catch {}
 
-      // Calculate mining start and end times based on ADMIN's configured start hour
-      // Start time = today at admin's configured hour
-      const miningStart = new Date(makkahNow)
-      miningStart.setHours(startHour, 0, 0, 0)
-
-      // If start time is in the FUTURE today (e.g., it's 11:50 PM, start is 12:00 AM = 0:00)
-      // then miningStart is actually tomorrow at 00:00
-      if (miningStart.getTime() <= makkahNow.getTime()) {
-        // Start time already passed today (e.g., it's 12:30 AM, start was 12:00 AM)
-        // Mining started at 12:00 AM, end = 12:00 AM + 24h
-        // Keep miningStart as today's start hour
-      }
-      // Note: if start time is in the future, miningStart stays as today's future time
-
-      // End time = start + duration
+      // Start mining NOW, end = now + duration
+      const miningStart = new Date()
       const miningEnd = new Date(miningStart.getTime() + durationHours * 60 * 60 * 1000)
 
       await db.user.update({
@@ -202,25 +175,20 @@ export async function POST(req: NextRequest) {
         }
       })
 
-      // Determine if mining is pending or active
-      const isPending = miningStart.getTime() > makkahNow.getTime()
-
       await db.notification.create({
         data: {
           userId: user.id,
           type: 'SUCCESS',
-          title: isPending ? '⏳ Mining Scheduled!' : '⛏️ Mining Activated!',
-          message: isPending
-            ? `Mining will start at ${miningStart.toLocaleString('en-US', { timeZone: 'Asia/Riyadh', hour: 'numeric', minute: '2-digit', hour12: true })} Makkah time.`
-            : `Mining is now active! Earn profits for ${durationHours} hours.`,
+          title: '⛏️ Mining Activated!',
+          message: `Mining is now active! Earn profits for ${durationHours} hours.`,
         }
       })
 
       return apiSuccess({
-        message: isPending ? 'Mining scheduled' : 'Mining activated',
+        message: 'Mining activated',
         startTime: miningStart.toISOString(),
         endTime: miningEnd.toISOString(),
-        isPending,
+        isPending: false,
       })
     }
 

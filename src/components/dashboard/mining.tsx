@@ -64,72 +64,42 @@ export function MiningPage() {
     }
   }
 
-  // Live profit + countdown for active AND pending mining
+  // Live profit + countdown - SIMPLE AND RELIABLE
   useEffect(() => {
-    if (!miningData || !user?.activePlan) {
+    const startTime = miningData?.lastActivation ? new Date(miningData.lastActivation).getTime() : 0
+    const endTime = miningData?.expiresAt ? new Date(miningData.expiresAt).getTime() : 0
+
+    if (startTime === 0 || endTime === 0 || !user?.activePlan) {
       setLiveProfit(0)
       return
     }
 
-    const plan = user.activePlan
-    const dailyProfitAmount = plan.investment * plan.dailyProfit / 100
+    const dailyProfitAmount = user.activePlan.investment * user.activePlan.dailyProfit / 100
+    const totalDurationMs = (miningSettings?.miningDurationHours || 24) * 60 * 60 * 1000
 
-    // Get times from miningData (returned by API)
-    const startTime = miningData.lastActivation ? new Date(miningData.lastActivation).getTime() : 0
-    const endTime = miningData.expiresAt ? new Date(miningData.expiresAt).getTime() : 0
-    const totalDuration = miningSettings?.miningDurationHours || 24
-    const totalDurationMs = totalDuration * 60 * 60 * 1000
-
-    const calc = () => {
+    const tick = () => {
       const now = Date.now()
 
-      // If no mining session set, do nothing
-      if (startTime === 0 || endTime === 0) {
-        setLiveProfit(0)
-        return
-      }
-
-      // PENDING state: start time is in the future
-      if (startTime > now) {
-        const remainingToStart = startTime - now
-        const h = Math.floor(remainingToStart / (1000 * 60 * 60))
-        const m = Math.floor((remainingToStart % (1000 * 60 * 60)) / (60 * 1000))
-        const s = Math.floor((remainingToStart % (60 * 1000)) / 1000)
-        setTimeUntilStart({ hours: h, minutes: m, seconds: s })
-        setLiveProfit(0)
-        return
-      }
-
-      // ACTIVE state: startTime <= now AND endTime > now
-      if (startTime <= now && endTime > now) {
-        // Calculate profit from actual start time
+      // Mining active: startTime <= now < endTime
+      if (startTime <= now && now < endTime) {
         const elapsedMs = now - startTime
-        const elapsedDays = Math.max(0, elapsedMs) / (1000 * 60 * 60 * 24)
-        const profit = dailyProfitAmount * elapsedDays
-        setLiveProfit(profit)
+        const elapsedDays = elapsedMs / (1000 * 60 * 60 * 24)
+        setLiveProfit(dailyProfitAmount * elapsedDays)
 
-        // Countdown to end
         const remaining = endTime - now
-        const hours = Math.floor(remaining / (1000 * 60 * 60))
-        const minutes = Math.floor((remaining % (1000 * 60 * 60)) / (60 * 1000))
-        const seconds = Math.floor((remaining % (60 * 1000)) / 1000)
-        const elapsed = totalDurationMs - remaining
-        const percent = Math.min(100, Math.max(0, (elapsed / totalDurationMs) * 100))
-        setTimeLeft({ hours, minutes, seconds, percent })
-        return
-      }
-
-      // Mining expired
-      if (endTime <= now) {
-        setLiveProfit(0)
-        setTimeLeft({ hours: 0, minutes: 0, seconds: 0, percent: 100 })
+        setTimeLeft({
+          hours: Math.floor(remaining / 3600000),
+          minutes: Math.floor((remaining % 3600000) / 60000),
+          seconds: Math.floor((remaining % 60000) / 1000),
+          percent: Math.min(100, ((totalDurationMs - remaining) / totalDurationMs) * 100),
+        })
       }
     }
 
-    calc()
-    const interval = setInterval(calc, 1000)
-    return () => clearInterval(interval)
-  }, [miningData?.lastActivation, miningData?.expiresAt, miningData?.isMiningActive, miningData?.isPending, user?.activePlan, miningSettings?.miningDurationHours])
+    tick()
+    const id = setInterval(tick, 1000)
+    return () => clearInterval(id)
+  }, [miningData?.lastActivation, miningData?.expiresAt, user?.activePlan, miningSettings?.miningDurationHours])
 
   const hasActivePlan = user?.activePlan && user?.planExpiresAt && new Date(user.planExpiresAt).getTime() > Date.now()
   const isMiningActive = miningData?.isMiningActive
@@ -144,8 +114,19 @@ export function MiningPage() {
       })
       const data = await res.json()
       if (data.success) {
-        toast.success(isRtl ? '⛏️ تم تفعيل التعدين اليومي!' : '⛏️ Daily mining activated!')
-        fetchMiningData()
+        toast.success(isRtl ? '⛏️ تم تفعيل التعدين!' : '⛏️ Mining activated!')
+        // Update miningData immediately from response
+        if (data.data.startTime && data.data.endTime) {
+          setMiningData(prev => ({
+            ...prev,
+            lastActivation: data.data.startTime,
+            expiresAt: data.data.endTime,
+            isPending: data.data.isPending,
+            isMiningActive: !data.data.isPending,
+          }))
+        }
+        // Also refetch after a short delay
+        setTimeout(() => fetchMiningData(), 500)
         fetchCurrentUser()
       } else {
         toast.error(data.error || 'Failed')
